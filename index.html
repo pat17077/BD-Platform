@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spread Desk — Internal</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg: #0b0e17; --bg2: #111520; --bg3: #181d2e; --bg4: #1e2438;
+  --border: rgba(255,255,255,0.06); --border2: rgba(255,255,255,0.11);
+  --text: #dde2f0; --text2: #8a96b8; --text3: #4a5270;
+  --gold: #c8a96e; --gold2: #e8d0a0;
+  --green: #3dd68c; --gdim: rgba(61,214,140,0.1);
+  --amber: #f5a623; --adim: rgba(245,166,35,0.1);
+  --red: #f75858; --rdim: rgba(247,88,88,0.1);
+  --blue: #4f8ef7; --bdim: rgba(79,142,247,0.1);
+  --r: 7px;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'IBM Plex Sans',sans-serif; background:var(--bg); color:var(--text); font-size:14px; line-height:1.5; min-height:100vh; }
+
+/* ── Login ── */
+#login-screen {
+  position:fixed;inset:0;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;z-index:999;
+}
+.login-box { background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:2.5rem;width:360px; }
+.login-logo { font-family:'IBM Plex Mono',monospace;font-size:18px;color:var(--gold);margin-bottom:4px; }
+.login-sub { font-size:12px;color:var(--text3);margin-bottom:2rem; }
+.login-field { display:flex;flex-direction:column;gap:5px;margin-bottom:1rem; }
+.login-field label { font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.08em; }
+.login-field input { font-family:'IBM Plex Sans',sans-serif;font-size:14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:9px 12px;color:var(--text);outline:none; }
+.login-field input:focus { border-color:var(--gold); }
+.login-btn { width:100%;padding:10px;background:var(--gold);color:#0b0e17;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:500;border:none;border-radius:var(--r);cursor:pointer;transition:opacity .15s; }
+.login-btn:hover { opacity:.9; }
+.login-err { font-size:12px;color:var(--red);margin-top:.75rem;display:none; }
+.login-note { font-size:11px;color:var(--text3);margin-top:1rem;text-align:center; }
+
+/* ── App shell ── */
+#app { display:none; }
+.topbar { display:flex;align-items:center;justify-content:space-between;padding:0 1.25rem;height:50px;background:var(--bg2);border-bottom:1px solid var(--border2); }
+.topbar-left { display:flex;align-items:center;gap:16px; }
+.app-logo { font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:500;color:var(--gold);letter-spacing:.06em; }
+.int-badge { font-size:10px;font-weight:500;background:var(--rdim);color:var(--red);padding:2px 8px;border-radius:3px;letter-spacing:.1em;text-transform:uppercase;border:1px solid rgba(247,88,88,0.2); }
+nav { display:flex;gap:1px; }
+.nav-btn { font-size:13px;padding:5px 14px;background:none;border:none;cursor:pointer;color:var(--text2);border-radius:var(--r);transition:all .12s; }
+.nav-btn:hover { background:var(--bg3);color:var(--text); }
+.nav-btn.active { background:var(--bg3);color:var(--blue); }
+.topbar-right { font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text3);display:flex;gap:14px;align-items:center; }
+.live-dot::before { content:'● ';color:var(--green);font-size:9px; }
+
+/* ── Layout ── */
+.layout { display:flex;height:calc(100vh - 50px); }
+.sidebar { width:190px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);padding:.875rem 0;overflow-y:auto; }
+.sb-section { padding:0 .875rem .875rem;border-bottom:1px solid var(--border);margin-bottom:.875rem; }
+.sb-label { font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:5px; }
+.sb-item { display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:var(--r);cursor:pointer;font-size:13px;color:var(--text2);transition:background .1s; }
+.sb-item:hover { background:var(--bg3);color:var(--text); }
+.sb-item.active { background:var(--bg3);color:var(--blue); }
+.sb-count { font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text3); }
+.sb-count.flag { color:var(--amber); }
+.content { flex:1;overflow-y:auto;padding:1.25rem; }
+
+/* ── Pages ── */
+.page { display:none; }
+.page.active { display:block; }
+
+/* ── Stat strip ── */
+.stat-strip { display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:1.25rem; }
+.stat-box { background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:.75rem .875rem; }
+.stat-label { font-size:10px;color:var(--text3);margin-bottom:3px;letter-spacing:.04em; }
+.stat-val { font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:500;color:var(--text); }
+.stat-val.g { color:var(--green); } .stat-val.a { color:var(--amber); }
+.stat-delta { font-size:10px;color:var(--text3);margin-top:2px; }
+
+/* ── Panel ── */
+.panel { background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:1rem; }
+.panel-title { font-size:11px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);margin-bottom:.875rem;display:flex;align-items:center;justify-content:space-between; }
+.panel-action { font-size:12px;color:var(--blue);background:none;border:none;cursor:pointer;text-transform:none;letter-spacing:0; }
+
+/* ── Data table ── */
+.dt { width:100%;border-collapse:collapse;font-size:13px;margin-bottom:1.25rem; }
+.dt th { text-align:left;padding:7px 10px;font-size:10px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border2);white-space:nowrap;cursor:pointer;user-select:none; }
+.dt th:hover { color:var(--text2); }
+.dt th.sorted { color:var(--blue); }
+.dt td { padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text); }
+.dt tr:hover td { background:var(--bg2); }
+.mono { font-family:'IBM Plex Mono',monospace; }
+
+/* ── Chips ── */
+.chip { display:inline-block;font-size:11px;font-weight:500;padding:2px 7px;border-radius:3px; }
+.cg { background:var(--gdim);color:var(--green); }
+.ca { background:var(--adim);color:var(--amber); }
+.cr { background:var(--rdim);color:var(--red); }
+.cb { background:var(--bdim);color:var(--blue); }
+
+/* ── Markup bar ── */
+.mk-cell { display:flex;align-items:center;gap:6px; }
+.mk-track { width:56px;height:4px;background:var(--bg4);border-radius:2px;overflow:hidden; }
+.mk-fill { height:100%;border-radius:2px; }
+.mf-g { background:var(--green); } .mf-a { background:var(--amber); } .mf-r { background:var(--red); }
+
+/* ── Two col ── */
+.two-col { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.25rem; }
+
+/* ── Opportunity item ── */
+.opp-item { padding:9px 0;border-bottom:1px solid var(--border); }
+.opp-item:last-child { border-bottom:none;padding-bottom:0; }
+.opp-head { display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px; }
+.opp-name { font-weight:500;color:var(--text); }
+.opp-mk { font-family:'IBM Plex Mono',monospace;color:var(--green);font-size:14px; }
+.opp-sub { font-size:11px;color:var(--text3); }
+.opp-meta { display:flex;gap:12px;margin-top:5px; }
+.om { font-size:11px;color:var(--text3); }
+.om span { color:var(--text2);font-family:'IBM Plex Mono',monospace; }
+
+/* ── Alert items ── */
+.alert-item { display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border); }
+.alert-item:last-child { border-bottom:none; }
+.alert-dot { width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:4px; }
+.ad-g{background:var(--green);}.ad-a{background:var(--amber);}.ad-r{background:var(--red);}.ad-b{background:var(--blue);}
+.alert-body { flex:1; }
+.alert-title { font-size:13px;color:var(--text); }
+.alert-time { font-size:11px;color:var(--text3);margin-top:1px; }
+
+/* ── Simulator ── */
+.sim-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:.875rem 0; }
+.sim-field { display:flex;flex-direction:column;gap:4px; }
+.sim-label { font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em; }
+.sim-input { font-family:'IBM Plex Mono',monospace;font-size:14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:7px 10px;color:var(--text);outline:none;transition:border-color .15s; }
+.sim-input:focus { border-color:var(--gold); }
+.sim-output { background:var(--bg3);border-radius:var(--r);padding:.875rem;display:grid;grid-template-columns:repeat(4,1fr);gap:10px; }
+.so-label { font-size:11px;color:var(--text3);margin-bottom:3px; }
+.so-val { font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:500; }
+.so-val.g { color:var(--green); } .so-val.a { color:var(--amber); }
+
+/* ── TRACE / NIM2 rows ── */
+.feed-row { display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border); }
+.feed-head { font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em; }
+.feed-row:last-child { border-bottom:none; }
+
+/* ── Outlook internal ── */
+.outlook-body-int { font-size:14px;line-height:1.8;color:var(--text2); }
+.outlook-section-title { font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin:.875rem 0 .35rem; }
+.refresh-pill { font-size:11px;padding:4px 12px;border-radius:var(--r);background:none;border:1px solid var(--border2);color:var(--text2);cursor:pointer; }
+.refresh-pill:hover { border-color:var(--gold);color:var(--gold); }
+
+/* ── Curve strip ── */
+.curve-strip-int { display:flex;gap:0;overflow-x:auto;background:var(--bg3);border-radius:var(--r);margin-bottom:1rem; }
+.cp { flex:1;min-width:55px;text-align:center;padding:.6rem 4px;border-right:1px solid var(--border); }
+.cp:last-child { border-right:none; }
+.cp-l { font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px; }
+.cp-y { font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:500;color:var(--gold2); }
+
+/* ── Chart ── */
+.chart-wrap { position:relative;width:100%;height:200px;margin-bottom:1rem; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">SPREAD DESK</div>
+    <div class="login-sub">Internal platform · Authorized access only</div>
+    <div class="login-field"><label>Username</label><input type="text" id="login-user" placeholder="desk@yourfirm.com"></div>
+    <div class="login-field"><label>Password</label><input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="login-btn" onclick="doLogin()">Sign in</button>
+    <div class="login-err" id="login-err">Invalid credentials. Contact your administrator.</div>
+    <div class="login-note">Demo: user <strong>desk</strong> · pass <strong>demo123</strong></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="app-logo">SPREAD DESK</div>
+    <span class="int-badge">Internal</span>
+    <nav>
+      <button class="nav-btn active" onclick="showPage('inventory',this)">Inventory</button>
+      <button class="nav-btn" onclick="showPage('markup',this)">Markup sim</button>
+      <button class="nav-btn" onclick="showPage('trace',this)">TRACE log</button>
+      <button class="nav-btn" onclick="showPage('nim2',this)">NIM2 feed</button>
+      <button class="nav-btn" onclick="showPage('outlook-int',this)">Outlook</button>
+    </nav>
+  </div>
+  <div class="topbar-right">
+    <span class="live-dot">LIVE</span>
+    <span id="int-sofr">SOFR —</span>
+    <span id="int-2s10s">2s10s —</span>
+    <span id="int-clock">—</span>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sb-section">
+      <div class="sb-label">Product</div>
+      <div class="sb-item active" onclick="sbFilter('all',this)">All products <span class="sb-count" id="sb-all">9</span></div>
+      <div class="sb-item" onclick="sbFilter('gse',this)">GSE / Agency <span class="sb-count">3</span></div>
+      <div class="sb-item" onclick="sbFilter('corp',this)">Corporates <span class="sb-count">2</span></div>
+      <div class="sb-item" onclick="sbFilter('muni',this)">Munis <span class="sb-count">2</span></div>
+      <div class="sb-item" onclick="sbFilter('repo',this)">Repo <span class="sb-count">2</span></div>
+    </div>
+    <div class="sb-section">
+      <div class="sb-label">Markup tier</div>
+      <div class="sb-item" onclick="sbMarkup('high',this)">&gt;30 bps</div>
+      <div class="sb-item" onclick="sbMarkup('mid',this)">15–30 bps</div>
+      <div class="sb-item" onclick="sbMarkup('low',this)">&lt;15 bps</div>
+    </div>
+    <div class="sb-section">
+      <div class="sb-label">Alerts</div>
+      <div class="sb-item">New issues <span class="sb-count flag">2</span></div>
+      <div class="sb-item">Markup flags <span class="sb-count flag">1</span></div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- INVENTORY -->
+    <div class="page active" id="page-inventory">
+      <div class="stat-strip">
+        <div class="stat-box"><div class="stat-label">Avg markup today</div><div class="stat-val g" id="s-avgmk">—</div><div class="stat-delta">vs street typical</div></div>
+        <div class="stat-box"><div class="stat-label">Best BD product</div><div class="stat-val a" id="s-bestbd">—</div><div class="stat-delta" id="s-bestbd-sub">—</div></div>
+        <div class="stat-box"><div class="stat-label">Best client value</div><div class="stat-val" id="s-bestcl" style="font-size:14px">—</div><div class="stat-delta">top pick</div></div>
+        <div class="stat-box"><div class="stat-label">2yr TSY</div><div class="stat-val mono" id="s-2yr">—</div><div class="stat-delta">Fed pricing in cuts</div></div>
+        <div class="stat-box"><div class="stat-label">10yr TSY</div><div class="stat-val mono" id="s-10yr">—</div><div class="stat-delta">term premium</div></div>
+      </div>
+
+      <div class="panel-title">
+        Spread + markup reference
+        <select class="sim-input" id="inv-sort" style="width:auto;font-size:12px;padding:4px 8px" onchange="renderInventory()">
+          <option value="markup">Sort: markup high→low</option>
+          <option value="spread">Sort: client spread</option>
+          <option value="value">Sort: client value</option>
+        </select>
+      </div>
+
+      <table class="dt" id="inv-table"></table>
+
+      <div class="two-col">
+        <div class="panel"><div class="panel-title">Top markup opportunities</div><div id="opp-list"></div></div>
+        <div class="panel"><div class="panel-title">Alerts &amp; flags <button class="panel-action">Clear all</button></div><div id="alerts-list"></div></div>
+      </div>
+    </div>
+
+    <!-- MARKUP SIM -->
+    <div class="page" id="page-markup">
+      <div class="panel" style="margin-bottom:1rem">
+        <div class="panel-title">Trade markup simulator</div>
+        <div class="sim-grid">
+          <div class="sim-field"><div class="sim-label">Product</div>
+            <select class="sim-input" id="sim-prod" onchange="runSim()">
+              <option value="gse-callable">Callable Agency</option>
+              <option value="gse-bullet">Agency Bullet</option>
+              <option value="ig-corp">IG Corporate</option>
+              <option value="hy-corp">High Yield</option>
+              <option value="muni-go">Muni GO</option>
+              <option value="muni-rev">Muni Revenue</option>
+              <option value="treasury-off">Off-the-run UST</option>
+              <option value="term-repo">Term Repo</option>
+            </select>
+          </div>
+          <div class="sim-field"><div class="sim-label">Face value ($)</div><input class="sim-input" id="sim-face" type="number" value="1000000" oninput="runSim()"></div>
+          <div class="sim-field"><div class="sim-label">Client type</div>
+            <select class="sim-input" id="sim-client" onchange="runSim()">
+              <option value="retail">Retail</option>
+              <option value="ria">RIA / Wealth mgmt</option>
+              <option value="inst">Institutional</option>
+            </select>
+          </div>
+          <div class="sim-field"><div class="sim-label">Our cost yield (%)</div><input class="sim-input" id="sim-our" type="number" value="5.10" step=".01" oninput="runSim()"></div>
+          <div class="sim-field"><div class="sim-label">Duration (yrs)</div><input class="sim-input" id="sim-dur" type="number" value="3" step=".5" oninput="runSim()"></div>
+          <div class="sim-field"><div class="sim-label">Client yield (%)</div><input class="sim-input" id="sim-cly" type="number" value="5.00" step=".01" oninput="runSim()"></div>
+        </div>
+        <div class="sim-output" id="sim-out"></div>
+      </div>
+      <div class="panel"><div class="panel-title">Street markup norms by product</div><table class="dt" id="norms-table"></table></div>
+    </div>
+
+    <!-- TRACE LOG -->
+    <div class="page" id="page-trace">
+      <div class="panel">
+        <div class="panel-title">TRACE print log — recent reportable transactions</div>
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr auto;gap:8px;padding:6px 0;border-bottom:1px solid var(--border2)">
+          <div class="feed-head">CUSIP / issuer</div><div class="feed-head">Type</div><div class="feed-head">Par</div><div class="feed-head">Price</div><div class="feed-head">Yield</div><div class="feed-head">Time</div><div></div>
+        </div>
+        <div id="trace-log"></div>
+      </div>
+    </div>
+
+    <!-- NIM2 FEED -->
+    <div class="page" id="page-nim2">
+      <div class="panel">
+        <div class="panel-title">
+          Bloomberg NIM2 — new issue monitor
+          <span class="live-dot" style="font-size:12px;text-transform:none;letter-spacing:0;color:var(--green)">Live (simulated)</span>
+        </div>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:1rem">Production: wire Bloomberg B-PIPE SAPI feed. New prints auto-load to TRACE queue.</p>
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr auto;gap:8px;padding:6px 0;border-bottom:1px solid var(--border2)">
+          <div class="feed-head">Issuer / CUSIP</div><div class="feed-head">Type</div><div class="feed-head">Coupon</div><div class="feed-head">Maturity</div><div class="feed-head">Size</div><div class="feed-head">Spread</div><div></div>
+        </div>
+        <div id="nim2-log"></div>
+      </div>
+    </div>
+
+    <!-- OUTLOOK INTERNAL -->
+    <div class="page" id="page-outlook-int">
+      <div class="panel">
+        <div class="panel-title">
+          AI Economic Outlook — Internal view
+          <button class="refresh-pill" onclick="refreshOutlookInt()">Force refresh</button>
+        </div>
+        <div id="curve-strip-int" class="curve-strip-int"></div>
+        <div id="outlook-int-body"><div style="color:var(--text3);font-style:italic">Loading...</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<script>
+// ─── Config ───────────────────────────────────────────────────────────────────
+const API_BASE = 'http://localhost:3001';
+const INTERNAL_TOKEN = 'internal-secret-token'; // match server INTERNAL_TOKEN env var
+
+// Demo credentials — replace with real auth in production
+const DEMO_CREDS = { desk: 'demo123', admin: 'admin123' };
+
+async function apiFetch(path, internal=false) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (internal) headers['x-internal-token'] = INTERNAL_TOKEN;
+  const res = await fetch(API_BASE + path, { headers });
+  if (!res.ok) throw new Error(res.status);
+  return res.json();
+}
+
+async function apiPost(path, body={}, internal=false) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (internal) headers['x-internal-token'] = INTERNAL_TOKEN;
+  const res = await fetch(API_BASE + path, { method:'POST', headers, body:JSON.stringify(body) });
+  if (!res.ok) throw new Error(res.status);
+  return res.json();
+}
+
+// ─── Login ────────────────────────────────────────────────────────────────────
+function doLogin() {
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  if (DEMO_CREDS[user] === pass) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    initApp();
+  } else {
+    document.getElementById('login-err').style.display = 'block';
+  }
+}
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let curve = null;
+let catFilter = 'all';
+let mkFilter = null;
+
+const PRODUCTS = [
+  { id:'gse-callable', cat:'gse', name:'Callable Agency', sub:'FHLB/FNMA callable',     streetLow:15, streetHigh:30, streetTypical:22, clientVal:'A', dealerVal:'A', note:'Off-the-run/longer calls = top of range.' },
+  { id:'gse-bullet',   cat:'gse', name:'Agency Bullet',   sub:'FHLB/FNMA non-callable', streetLow:5,  streetHigh:15, streetTypical:9,  clientVal:'A', dealerVal:'B', note:'On-the-run compresses to low end.' },
+  { id:'ig-corp',      cat:'corp', name:'IG Corporate',   sub:'A–BBB, 3–10yr',          streetLow:20, streetHigh:45, streetTypical:28, clientVal:'A', dealerVal:'A', note:'Odd lots + off-the-run push to high end.' },
+  { id:'hy-corp',      cat:'corp', name:'High Yield',     sub:'BB/B rated',              streetLow:40, streetHigh:80, streetTypical:58, clientVal:'B', dealerVal:'A', note:'Wide market. Watch sourcing and liquidity.' },
+  { id:'muni-go',      cat:'muni', name:'Muni GO',        sub:'AA–AAA GO',               streetLow:25, streetHigh:55, streetTypical:35, clientVal:'B', dealerVal:'A', note:'Best markup % of all sectors. Less TRACE transparency.' },
+  { id:'muni-rev',     cat:'muni', name:'Muni Revenue',   sub:'A–AA revenue',            streetLow:25, streetHigh:60, streetTypical:38, clientVal:'C', dealerVal:'A', note:'Complexity tolerance. Always check issuer credit.' },
+  { id:'treasury-off', cat:'treasury', name:'Off-the-run UST', sub:'5–30yr cusips',      streetLow:1,  streetHigh:6,  streetTypical:3,  clientVal:'A', dealerVal:'C', note:'Near zero margin. Relationship product only.' },
+  { id:'term-repo',    cat:'repo', name:'Term Repo 1–3mo', sub:'UST/Agency coll.',       streetLow:10, streetHigh:25, streetTypical:18, clientVal:'A', dealerVal:'A', note:'Best spread opp in repo. Relationship-driven.' },
+  { id:'repo-on',      cat:'repo', name:'Overnight Repo', sub:'UST coll. ~SOFR',         streetLow:4,  streetHigh:12, streetTypical:8,  clientVal:'A', dealerVal:'B', note:'Volume game. Thin margin but strong relationships.' },
+];
+
+const TRACE_PRINTS = [
+  { cusip:'3130B2KT4', issuer:'FHLB 5.25% 2029c', type:'Agency Callable', par:500000, price:99.875, yield:5.28, time:'10:38am' },
+  { cusip:'345397YV4', issuer:'Ford Motor 5.95% 2031', type:'IG Corporate', par:250000, price:100.125, yield:5.91, time:'10:22am' },
+  { cusip:'64966EYM1', issuer:'NY MTA 3.95% 2033', type:'Muni Revenue', par:100000, price:99.500, yield:4.01, time:'10:11am' },
+  { cusip:'3136G4KR2', issuer:'FNMA 4.99% 2027', type:'Agency Bullet', par:1000000, price:99.950, yield:5.01, time:'9:58am' },
+  { cusip:'912828ZT0', issuer:'UST 4.625% 2026', type:'Treasury', par:2000000, price:99.875, yield:4.68, time:'9:44am' },
+  { cusip:'3134GYN41', issuer:'FHLMC 5.10% 2028c', type:'Agency Callable', par:750000, price:100.000, yield:5.10, time:'9:31am' },
+];
+
+const NIM2 = [
+  { issuer:'FHLB', cusip:'3130B2KT4', type:'Callable Agency', coupon:5.25, maturity:'04/21/2029', size:'$1.5B', spread:'+68 5yr', isNew:true, time:'9:42am' },
+  { issuer:'FNMA', cusip:'3136G4KR2', type:'Agency Bullet',   coupon:4.99, maturity:'04/21/2027', size:'$2.0B', spread:'+27 3yr', isNew:true, time:'8:15am' },
+  { issuer:'Ford Motor Credit', cusip:'345397YV4', type:'IG Corp', coupon:5.95, maturity:'04/15/2031', size:'$750M', spread:'+148 7yr', isNew:false, time:'Apr 22 3:20pm' },
+  { issuer:'NY MTA', cusip:'64966EYM1', type:'Muni Revenue', coupon:3.95, maturity:'04/01/2033', size:'$500M', spread:'TE +82 7yr', isNew:false, time:'Apr 22 10:05am' },
+  { issuer:'FHLMC', cusip:'3134GYN41', type:'Callable Agency', coupon:5.10, maturity:'04/15/2028', size:'$1.0B', spread:'+61 3yr', isNew:false, time:'Apr 20' },
+];
+
+const SIM_NORMS = {
+  'gse-callable':  { name:'Callable Agency',  lo:15, hi:30, typ:22, note:'Off-the-run/longer call = top of range' },
+  'gse-bullet':    { name:'Agency Bullet',     lo:5,  hi:15, typ:9,  note:'On-the-run compresses to low end' },
+  'ig-corp':       { name:'IG Corporate',      lo:20, hi:45, typ:28, note:'Off-the-run, odd lots push higher' },
+  'hy-corp':       { name:'High Yield',        lo:40, hi:80, typ:58, note:'Sourcing premium is real' },
+  'muni-go':       { name:'Muni GO',           lo:25, hi:55, typ:35, note:'Less TRACE transparency' },
+  'muni-rev':      { name:'Muni Revenue',      lo:25, hi:60, typ:38, note:'Issuer complexity adds tolerance' },
+  'treasury-off':  { name:'Off-the-run UST',   lo:1,  hi:6,  typ:3,  note:'Tight; relationship/size-driven' },
+  'term-repo':     { name:'Term Repo',         lo:10, hi:25, typ:18, note:'Rate + collateral haircut = take' },
+};
+
+// ─── Nav ──────────────────────────────────────────────────────────────────────
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
+  if (id==='outlook-int') loadOutlookInt();
+}
+
+// ─── Sidebar filters ──────────────────────────────────────────────────────────
+function sbFilter(f, el) {
+  catFilter=f; mkFilter=null;
+  document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
+  el.classList.add('active');
+  renderInventory();
+}
+
+function sbMarkup(tier, el) {
+  mkFilter=tier; catFilter='all';
+  document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
+  el.classList.add('active');
+  renderInventory();
+}
+
+function getFiltered() {
+  let items = catFilter==='all' ? PRODUCTS : PRODUCTS.filter(p=>p.cat===catFilter);
+  if (mkFilter==='high') items=items.filter(p=>p.streetTypical>30);
+  else if (mkFilter==='mid') items=items.filter(p=>p.streetTypical>=15&&p.streetTypical<=30);
+  else if (mkFilter==='low') items=items.filter(p=>p.streetTypical<15);
+  const s=document.getElementById('inv-sort')?.value||'markup';
+  if (s==='markup') return [...items].sort((a,b)=>b.streetTypical-a.streetTypical);
+  if (s==='spread') return [...items].sort((a,b)=>b.streetHigh-a.streetHigh);
+  return [...items].sort((a,b)=>({'A':0,'B':1,'C':2}[a.clientVal]-{'A':0,'B':1,'C':2}[b.clientVal]));
+}
+
+function chipCls(v) { return v==='A'?'cg':v==='B'?'ca':'cr'; }
+function mkColor(bps) { return bps>30?'mf-a':bps>15?'mf-a':'mf-g'; }
+
+function renderInventory() {
+  const items=getFiltered();
+  const avg=+(items.reduce((s,p)=>s+p.streetTypical,0)/items.length).toFixed(0);
+  const bestBD=items.filter(p=>p.dealerVal==='A').sort((a,b)=>b.streetTypical-a.streetTypical)[0];
+  const bestCL=items.filter(p=>p.clientVal==='A').sort((a,b)=>b.streetHigh-a.streetHigh)[0];
+  document.getElementById('s-avgmk').textContent=avg+' bps';
+  document.getElementById('s-bestbd').textContent=bestBD?.name||'—';
+  document.getElementById('s-bestbd-sub').textContent=bestBD?'~'+bestBD.streetTypical+' bps typical':'—';
+  document.getElementById('s-bestcl').textContent=bestCL?.name||'—';
+  if (curve) {
+    document.getElementById('s-2yr').textContent=(curve['2yr']?.yield.toFixed(2)||'—')+'%';
+    document.getElementById('s-10yr').textContent=(curve['10yr']?.yield.toFixed(2)||'—')+'%';
+  }
+
+  document.getElementById('inv-table').innerHTML=`
+    <thead><tr>
+      <th>Product</th><th class="sorted">Markup typical</th><th>Street range</th>
+      <th>Client value</th><th>BD value</th><th>Liquidity note</th>
+    </tr></thead>
+    <tbody>${items.map(p=>`
+      <tr>
+        <td><div style="font-weight:500">${p.name}</div><div style="font-size:11px;color:var(--text3)">${p.sub}</div></td>
+        <td>
+          <div class="mk-cell">
+            <span class="mono" style="color:var(--amber)">~${p.streetTypical} bps</span>
+            <div class="mk-track"><div class="mk-fill ${mkColor(p.streetTypical)}" style="width:${Math.min(p.streetTypical/80*100,100)}%"></div></div>
+          </div>
+        </td>
+        <td class="mono" style="color:var(--text2)">${p.streetLow}–${p.streetHigh} bps</td>
+        <td><span class="chip ${chipCls(p.clientVal)}">${p.clientVal}</span></td>
+        <td><span class="chip ${chipCls(p.dealerVal)}">${p.dealerVal}</span></td>
+        <td style="font-size:12px;color:var(--text3)">${p.note}</td>
+      </tr>
+    `).join('')}</tbody>`;
+
+  document.getElementById('opp-list').innerHTML=items.filter(p=>p.dealerVal==='A').slice(0,4).map(p=>`
+    <div class="opp-item">
+      <div class="opp-head"><div class="opp-name">${p.name}</div><div class="opp-mk">+${p.streetTypical} bps</div></div>
+      <div class="opp-sub">${p.sub}</div>
+      <div class="opp-meta">
+        <div class="om">Range: <span>${p.streetLow}–${p.streetHigh}</span></div>
+        <div class="om">Client: <span>${p.clientVal}</span></div>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('alerts-list').innerHTML=`
+    <div class="alert-item"><div class="alert-dot ad-a"></div><div class="alert-body"><div class="alert-title">FHLB new issue — 5.25% 2029c at +68 5yr</div><div class="alert-time">Today 9:42am · NIM2</div></div></div>
+    <div class="alert-item"><div class="alert-dot ad-a"></div><div class="alert-body"><div class="alert-title">FNMA bullet 4.99% 2027 — $2B deal priced</div><div class="alert-time">Today 8:15am · NIM2</div></div></div>
+    <div class="alert-item"><div class="alert-dot ad-g"></div><div class="alert-body"><div class="alert-title">Term repo volume +18% vs 30d avg</div><div class="alert-time">Daily summary</div></div></div>
+    <div class="alert-item"><div class="alert-dot ad-r"></div><div class="alert-body"><div class="alert-title">Muni revenue markup near upper street range</div><div class="alert-time">Compliance flag</div></div></div>
+    <div class="alert-item"><div class="alert-dot ad-b"></div><div class="alert-body"><div class="alert-title">2s10s back to +50 bps — curve re-steepening</div><div class="alert-time">Today 10:18am</div></div></div>`;
+}
+
+function runSim() {
+  const prod=document.getElementById('sim-prod').value;
+  const face=+document.getElementById('sim-face').value||1000000;
+  const dur=+document.getElementById('sim-dur').value||3;
+  const ourY=+document.getElementById('sim-our').value||5.10;
+  const clY=+document.getElementById('sim-cly').value||5.00;
+  const client=document.getElementById('sim-client').value;
+  const norm=SIM_NORMS[prod];
+  const bps=Math.round((ourY-clY)*100*dur);
+  const dol=Math.round(face*(ourY-clY)/100*dur);
+  const pctStreet=norm?Math.round(bps/norm.typ*100):0;
+  const clMult=client==='retail'?1.2:client==='ria'?1.0:0.7;
+  const adjHi=norm?Math.round(norm.hi*clMult):0;
+  const inRange=norm?bps>=norm.lo&&bps<=Math.round(norm.hi*clMult):true;
+  document.getElementById('sim-out').innerHTML=`
+    <div><div class="so-label">Markup (bps)</div><div class="so-val ${inRange?'g':'a'}">${bps}</div></div>
+    <div><div class="so-label">Dollar markup</div><div class="so-val g">$${dol.toLocaleString()}</div></div>
+    <div><div class="so-label">vs street typical</div><div class="so-val ${pctStreet<=110?'g':'a'}">${pctStreet}%</div></div>
+    <div><div class="so-label">Client ceiling</div><div class="so-val">${adjHi} bps</div></div>`;
+  document.getElementById('norms-table').innerHTML=`
+    <thead><tr><th>Product</th><th>Low</th><th>High</th><th>Typical</th><th>Note</th></tr></thead>
+    <tbody>${Object.entries(SIM_NORMS).map(([k,n])=>`
+      <tr style="${k===prod?'background:var(--bg3)':''}">
+        <td style="font-weight:${k===prod?500:400}">${n.name}</td>
+        <td class="mono">${n.lo}</td><td class="mono">${n.hi}</td>
+        <td class="mono" style="color:var(--amber)">${n.typ}</td>
+        <td style="font-size:12px;color:var(--text3)">${n.note}</td>
+      </tr>`).join('')}</tbody>`;
+}
+
+function renderTrace() {
+  document.getElementById('trace-log').innerHTML=TRACE_PRINTS.map(t=>`
+    <div class="feed-row">
+      <div><div class="mono" style="font-size:12px">${t.cusip}</div><div style="font-size:11px;color:var(--text3)">${t.issuer}</div></div>
+      <div style="font-size:12px;color:var(--text2)">${t.type}</div>
+      <div class="mono">$${(t.par/1000).toFixed(0)}K</div>
+      <div class="mono">${t.price.toFixed(3)}</div>
+      <div class="mono" style="color:var(--blue)">${t.yield.toFixed(2)}%</div>
+      <div style="font-size:12px;color:var(--text3)">${t.time}</div>
+      <div><button class="refresh-pill" style="font-size:11px;padding:3px 8px">Load</button></div>
+    </div>`).join('');
+}
+
+function renderNIM2() {
+  document.getElementById('nim2-log').innerHTML=NIM2.map(n=>`
+    <div class="feed-row">
+      <div><div style="font-weight:500">${n.issuer}</div><div class="mono" style="font-size:11px;color:var(--text3)">${n.cusip}</div></div>
+      <div style="font-size:12px;color:var(--text2)">${n.type}</div>
+      <div class="mono">${n.coupon.toFixed(2)}%</div>
+      <div class="mono" style="font-size:12px">${n.maturity}</div>
+      <div class="mono">${n.size}</div>
+      <div style="font-size:12px;color:var(--blue)">${n.spread}</div>
+      <div style="display:flex;align-items:center;gap:5px">
+        ${n.isNew?'<span class="chip ca" style="font-size:10px">New</span>':''}
+        <button class="refresh-pill" style="font-size:11px;padding:3px 8px">Queue</button>
+      </div>
+    </div>`).join('');
+}
+
+async function loadOutlookInt() {
+  const body=document.getElementById('outlook-int-body');
+  if (body.dataset.loaded) return;
+  body.dataset.loaded='1';
+  try {
+    const data=await apiFetch('/api/outlook');
+    if (data.curveSnapshot) {
+      document.getElementById('curve-strip-int').innerHTML=Object.entries(data.curveSnapshot).map(([k,v])=>`
+        <div class="cp"><div class="cp-l">${k}</div><div class="cp-y">${v.yield.toFixed(2)}%</div></div>`).join('');
+    }
+    const text=data.text||'';
+    const sections=['MARKET SNAPSHOT','FED POLICY OUTLOOK','INFLATION & GROWTH','FIXED INCOME STRATEGY','KEY RISKS TO WATCH'];
+    let html=text;
+    sections.forEach(s=>{html=html.replace(new RegExp(`(${s})`,'g'),`<div class="outlook-section-title">$1</div>`);});
+    html=html.replace(/\n\n/g,'</p><p>').replace(/\n/g,' ');
+    body.innerHTML=`<div class="outlook-body-int"><p>${html}</p></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:1rem">Generated: ${data.generatedAt?new Date(data.generatedAt).toLocaleString():''}</div>`;
+  } catch(e) {
+    body.innerHTML='<div style="color:var(--text3);font-style:italic">Could not load outlook — check backend.</div>';
+  }
+}
+
+async function refreshOutlookInt() {
+  const body=document.getElementById('outlook-int-body');
+  delete body.dataset.loaded;
+  body.innerHTML='<div style="color:var(--text3);font-style:italic">Regenerating outlook via Claude...</div>';
+  try {
+    await apiPost('/api/internal/outlook/refresh',{},true);
+    loadOutlookInt();
+  } catch(e) {
+    body.innerHTML='<div style="color:var(--red)">Refresh failed. Check API key and backend.</div>';
+  }
+}
+
+async function loadCurve() {
+  try {
+    const data=await apiFetch('/api/curve');
+    curve=data.curve;
+    renderInventory();
+    if (curve) {
+      const sofr=curve['1mo']?.yield;
+      const y2=curve['2yr']?.yield;
+      const y10=curve['10yr']?.yield;
+      if (sofr) document.getElementById('int-sofr').textContent='SOFR ~'+sofr.toFixed(2)+'%';
+      if (y2&&y10) document.getElementById('int-2s10s').textContent='2s10s +'+(((y10-y2)*100).toFixed(0))+'bp';
+    }
+  } catch(e) {
+    // Use mock curve so page works standalone
+    curve = { '1mo':{yield:4.35},'3mo':{yield:4.32},'6mo':{yield:4.18},'1yr':{yield:4.02},'2yr':{yield:3.82},'3yr':{yield:3.90},'5yr':{yield:4.05},'7yr':{yield:4.18},'10yr':{yield:4.30},'20yr':{yield:4.65},'30yr':{yield:4.88} };
+    document.getElementById('int-sofr').textContent='SOFR ~4.31%';
+    document.getElementById('int-2s10s').textContent='2s10s +48bp';
+    renderInventory();
+  }
+}
+
+function startClock() {
+  const tick = () => {
+    document.getElementById('int-clock').textContent=new Date().toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})+' ET';
+  };
+  tick();
+  setInterval(tick, 1000);
+}
+
+function initApp() {
+  startClock();
+  loadCurve();
+  renderInventory();
+  runSim();
+  renderTrace();
+  renderNIM2();
+}
+</script>
+</body>
+</html>
