@@ -5,9 +5,7 @@
  *         yield calculations, AI economic outlook via Claude API
  * 
  * Setup:
- *   npm install express cors node-fetch node-cron
- *   FRED_API_KEY=your_key ANTHROPIC_API_KEY=your_key node server.js
- * 
+
  * Free API keys:
  *   FRED: https://fred.stlouisfed.org/docs/api/api_key.html
  *   Anthropic: https://console.anthropic.com
@@ -126,6 +124,122 @@ async function fetchEconomicData() {
   cache.economicUpdated = new Date().toISOString();
   console.log('[econ] Updated:', Object.keys(result).length, 'indicators');
   return result;
+}
+
+const PRODUCT_TEMPLATES = [
+  {
+    id:'gse-callable', cat:'gse', name:'Callable Agency', sub:'FHLB/FNMA/FHLMC callable',
+    streetLow:15, streetHigh:30, streetTypical:22,
+    spread:0.37,
+    coupon:5.25,
+    dealerValue:0.22,
+    maturityRefs:['5yr','7yr','10yr','20yr','30yr'],
+    note:'Off-the-run / longer calls = top of range. Best BD value in agencies.'
+  },
+  {
+    id:'gse-bullet', cat:'gse', name:'Agency Bullet', sub:'FHLB/FNMA non-callable',
+    streetLow:5, streetHigh:15, streetTypical:9,
+    spread:0.09,
+    coupon:4.25,
+    dealerValue:0.09,
+    maturityRefs:['5yr','7yr','10yr'],
+    note:'On-the-run compresses to low end. Good for client, thin for us.'
+  },
+  {
+    id:'ig-corp', cat:'corp', name:'IG Corporate', sub:'A–BBB rated, 3–10yr',
+    streetLow:20, streetHigh:45, streetTypical:28,
+    spread:1.30,
+    coupon:4.50,
+    dealerValue:0.28,
+    maturityRefs:['5yr','7yr','10yr'],
+    note:'Odd lots and off-the-run push to high end of range.'
+  },
+  {
+    id:'hy-corp', cat:'corp', name:'High Yield Corp', sub:'BB/B rated',
+    streetLow:40, streetHigh:80, streetTypical:58,
+    spread:1.70,
+    coupon:5.75,
+    dealerValue:0.58,
+    maturityRefs:['5yr','7yr','10yr'],
+    note:'Wide market. Sourcing premium is real. Watch liquidity carefully.'
+  },
+  {
+    id:'muni-go', cat:'muni', name:'Muni GO', sub:'AA–AAA general obligation',
+    streetLow:25, streetHigh:55, streetTypical:35,
+    spread:-0.55,
+    coupon:3.75,
+    dealerValue:0.35,
+    maturityRefs:['10yr','20yr'],
+    note:'Less TRACE transparency = higher range tolerance. Best % markup.'
+  },
+  {
+    id:'muni-rev', cat:'muni', name:'Muni Revenue', sub:'A–AA revenue bonds',
+    streetLow:25, streetHigh:60, streetTypical:38,
+    spread:-0.59,
+    coupon:3.85,
+    dealerValue:0.38,
+    maturityRefs:['10yr','20yr'],
+    note:'Issuer complexity adds tolerance. Always check underlying credit.'
+  },
+  {
+    id:'treasury-off', cat:'treasury', name:'Off-the-run UST', sub:'5–30yr off-the-run',
+    streetLow:1, streetHigh:6, streetTypical:3,
+    spread:0.00,
+    coupon:4.30,
+    dealerValue:0.03,
+    maturityRefs:['10yr','20yr','30yr'],
+    note:'Near zero margin. Use as relationship product.'
+  },
+  {
+    id:'term-repo', cat:'repo', name:'Term Repo 1–3mo', sub:'UST/Agency collateral',
+    streetLow:10, streetHigh:25, streetTypical:18,
+    spread:0.10,
+    coupon:5.05,
+    dealerValue:0.18,
+    maturityRefs:['1mo','3mo'],
+    note:'Rate + collateral haircut = dealer take. Best spread for us in repo.'
+  },
+  {
+    id:'repo-on', cat:'repo', name:'Overnight Repo', sub:'UST collateral ~SOFR',
+    streetLow:4, streetHigh:12, streetTypical:8,
+    spread:0.05,
+    coupon:5.00,
+    dealerValue:0.08,
+    maturityRefs:['1mo','3mo'],
+    note:'Volume game. Tight margin but excellent for client relationships.'
+  },
+];
+
+async function buildInternalProducts() {
+  if (!cache.curve) await fetchCurve();
+  return PRODUCT_TEMPLATES.map(template => {
+    const ladder = template.maturityRefs.map(ref => {
+      const baseYield = cache.curve?.[ref]?.yield;
+      const customerYield = baseYield != null ? +(baseYield + template.spread).toFixed(2) : null;
+      return {
+        label: ref,
+        coupon: template.coupon,
+        customerYield,
+        dealerValue: template.dealerValue,
+        customerYieldLabel: customerYield != null ? `${customerYield.toFixed(2)}%` : '—',
+        couponLabel: template.coupon != null ? `${template.coupon.toFixed(2)}%` : '—',
+        dealerValueLabel: template.dealerValue != null ? `$${template.dealerValue.toFixed(2)}` : '—'
+      };
+    });
+    return {
+      id: template.id,
+      cat: template.cat,
+      name: template.name,
+      sub: template.sub,
+      streetLow: template.streetLow,
+      streetHigh: template.streetHigh,
+      streetTypical: template.streetTypical,
+      maturityLadder: ladder,
+      clientValue: ladder[0]?.customerYield ?? null,
+      dealerValue: +(template.dealerValue ?? (template.streetTypical / 100)).toFixed(2),
+      note: template.note,
+    };
+  });
 }
 
 // ─── Generate AI economic outlook via Claude ──────────────────────────────────
@@ -304,8 +418,9 @@ app.post('/api/yield/calculate', (req, res) => {
 });
 
 // Internal only: full spread + markup reference data
-app.get('/api/internal/products', requireInternal, (req, res) => {
-  res.json({ products: INTERNAL_PRODUCTS, updatedAt: new Date().toISOString() });
+app.get('/api/internal/products', requireInternal, async (req, res) => {
+  const products = await buildInternalProducts();
+  res.json({ products, updatedAt: new Date().toISOString() });
 });
 
 // Internal only: force refresh outlook
@@ -323,37 +438,6 @@ app.get('/api/internal/econ/full', requireInternal, async (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
-
-// ─── Internal products reference data ────────────────────────────────────────
-const INTERNAL_PRODUCTS = [
-  { id:'gse-callable', cat:'gse', name:'Callable Agency', sub:'FHLB/FNMA/FHLMC callable',
-    streetLow:15, streetHigh:30, streetTypical:22, clientValue:'A', dealerValue:'A',
-    note:'Off-the-run / longer calls = top of range. Best BD value in agencies.' },
-  { id:'gse-bullet', cat:'gse', name:'Agency Bullet', sub:'FHLB/FNMA non-callable',
-    streetLow:5, streetHigh:15, streetTypical:9, clientValue:'A', dealerValue:'B',
-    note:'On-the-run compresses to low end. Good for client, thin for us.' },
-  { id:'ig-corp', cat:'corp', name:'IG Corporate', sub:'A–BBB rated, 3–10yr',
-    streetLow:20, streetHigh:45, streetTypical:28, clientValue:'A', dealerValue:'A',
-    note:'Odd lots and off-the-run push to high end of range.' },
-  { id:'hy-corp', cat:'corp', name:'High Yield Corp', sub:'BB/B rated',
-    streetLow:40, streetHigh:80, streetTypical:58, clientValue:'B', dealerValue:'A',
-    note:'Wide market. Sourcing premium is real. Watch liquidity carefully.' },
-  { id:'muni-go', cat:'muni', name:'Muni GO', sub:'AA–AAA general obligation',
-    streetLow:25, streetHigh:55, streetTypical:35, clientValue:'B', dealerValue:'A',
-    note:'Less TRACE transparency = higher range tolerance. Best % markup.' },
-  { id:'muni-rev', cat:'muni', name:'Muni Revenue', sub:'A–AA revenue bonds',
-    streetLow:25, streetHigh:60, streetTypical:38, clientValue:'C', dealerValue:'A',
-    note:'Issuer complexity adds tolerance. Always check underlying credit.' },
-  { id:'treasury-off', cat:'treasury', name:'Off-the-run UST', sub:'5–30yr off-the-run',
-    streetLow:1, streetHigh:6, streetTypical:3, clientValue:'A', dealerValue:'C',
-    note:'Near zero margin. Use as relationship product.' },
-  { id:'term-repo', cat:'repo', name:'Term Repo 1–3mo', sub:'UST/Agency collateral',
-    streetLow:10, streetHigh:25, streetTypical:18, clientValue:'A', dealerValue:'A',
-    note:'Rate + collateral haircut = dealer take. Best spread for us in repo.' },
-  { id:'repo-on', cat:'repo', name:'Overnight Repo', sub:'UST collateral ~SOFR',
-    streetLow:4, streetHigh:12, streetTypical:8, clientValue:'A', dealerValue:'B',
-    note:'Volume game. Tight margin but excellent for client relationships.' },
-];
 
 // ─── Cron: refresh curve every hour, outlook every Monday 6am ─────────────────
 cron.schedule('0 * * * *', async () => {

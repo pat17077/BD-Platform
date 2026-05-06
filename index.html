@@ -87,7 +87,18 @@ nav { display:flex;gap:1px; }
 .dt th.sorted { color:var(--blue); }
 .dt td { padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text); }
 .dt tr:hover td { background:var(--bg2); }
+.ladder-row td { padding:5px 10px;background:rgba(255,255,255,0.025);color:var(--text2);font-size:12px;border-bottom:1px solid var(--border); }
+.ladder-row td:first-child { padding-left:1.75rem; }
+.ladder-row.last-rung td { border-bottom:1px solid var(--border2); }
+.product-row td { padding-top:14px;border-top:1px solid var(--border2); }
 .mono { font-family:'IBM Plex Mono',monospace; }
+
+/* ── Yield curve grid ── */
+.yc-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px; }
+.yc-card { background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:.75rem .875rem; }
+.yc-title { font-size:12px;font-weight:500;color:var(--text);margin-bottom:2px; }
+.yc-sub { font-size:10px;color:var(--text3);margin-bottom:6px; }
+.yc-canvas-wrap { position:relative;height:130px; }
 
 /* ── Chips ── */
 .chip { display:inline-block;font-size:11px;font-weight:500;padding:2px 7px;border-radius:3px; }
@@ -200,10 +211,10 @@ nav { display:flex;gap:1px; }
     <div class="sb-section">
       <div class="sb-label">Product</div>
       <div class="sb-item active" onclick="sbFilter('all',this)">All products <span class="sb-count" id="sb-all">9</span></div>
-      <div class="sb-item" onclick="sbFilter('gse',this)">GSE / Agency <span class="sb-count">3</span></div>
-      <div class="sb-item" onclick="sbFilter('corp',this)">Corporates <span class="sb-count">2</span></div>
-      <div class="sb-item" onclick="sbFilter('muni',this)">Munis <span class="sb-count">2</span></div>
-      <div class="sb-item" onclick="sbFilter('repo',this)">Repo <span class="sb-count">2</span></div>
+      <div class="sb-item" onclick="sbFilter('gse',this)">GSE / Agency <span class="sb-count" id="sb-gse">3</span></div>
+      <div class="sb-item" onclick="sbFilter('corp',this)">Corporates <span class="sb-count" id="sb-corp">2</span></div>
+      <div class="sb-item" onclick="sbFilter('muni',this)">Munis <span class="sb-count" id="sb-muni">2</span></div>
+      <div class="sb-item" onclick="sbFilter('repo',this)">Repo <span class="sb-count" id="sb-repo">2</span></div>
     </div>
     <div class="sb-section">
       <div class="sb-label">Markup tier</div>
@@ -240,6 +251,12 @@ nav { display:flex;gap:1px; }
       </div>
 
       <table class="dt" id="inv-table"></table>
+      <div id="no-products-message" style="display:none;text-align:center;padding:1.5rem;color:var(--text3);font-size:13px;">No products available.</div>
+
+      <div class="panel" style="margin-bottom:1.25rem">
+        <div class="panel-title">Yield curves by product class <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3)">— customer yield = live UST + category spread</span></div>
+        <div id="yc-grid" class="yc-grid"></div>
+      </div>
 
       <div class="two-col">
         <div class="panel"><div class="panel-title">Top markup opportunities</div><div id="opp-list"></div></div>
@@ -365,45 +382,99 @@ let curve = null;
 let catFilter = 'all';
 let mkFilter = null;
 
-const PRODUCTS = [
-  { id:'gse-callable', cat:'gse', name:'Callable Agency', sub:'FHLB/FNMA callable',     streetLow:15, streetHigh:30, streetTypical:22, clientVal:'A', dealerVal:'A', note:'Off-the-run/longer calls = top of range.' },
-  { id:'gse-bullet',   cat:'gse', name:'Agency Bullet',   sub:'FHLB/FNMA non-callable', streetLow:5,  streetHigh:15, streetTypical:9,  clientVal:'A', dealerVal:'B', note:'On-the-run compresses to low end.' },
-  { id:'ig-corp',      cat:'corp', name:'IG Corporate',   sub:'A–BBB, 3–10yr',          streetLow:20, streetHigh:45, streetTypical:28, clientVal:'A', dealerVal:'A', note:'Odd lots + off-the-run push to high end.' },
-  { id:'hy-corp',      cat:'corp', name:'High Yield',     sub:'BB/B rated',              streetLow:40, streetHigh:80, streetTypical:58, clientVal:'B', dealerVal:'A', note:'Wide market. Watch sourcing and liquidity.' },
-  { id:'muni-go',      cat:'muni', name:'Muni GO',        sub:'AA–AAA GO',               streetLow:25, streetHigh:55, streetTypical:35, clientVal:'B', dealerVal:'A', note:'Best markup % of all sectors. Less TRACE transparency.' },
-  { id:'muni-rev',     cat:'muni', name:'Muni Revenue',   sub:'A–AA revenue',            streetLow:25, streetHigh:60, streetTypical:38, clientVal:'C', dealerVal:'A', note:'Complexity tolerance. Always check issuer credit.' },
-  { id:'treasury-off', cat:'treasury', name:'Off-the-run UST', sub:'5–30yr cusips',      streetLow:1,  streetHigh:6,  streetTypical:3,  clientVal:'A', dealerVal:'C', note:'Near zero margin. Relationship product only.' },
-  { id:'term-repo',    cat:'repo', name:'Term Repo 1–3mo', sub:'UST/Agency coll.',       streetLow:10, streetHigh:25, streetTypical:18, clientVal:'A', dealerVal:'A', note:'Best spread opp in repo. Relationship-driven.' },
-  { id:'repo-on',      cat:'repo', name:'Overnight Repo', sub:'UST coll. ~SOFR',         streetLow:4,  streetHigh:12, streetTypical:8,  clientVal:'A', dealerVal:'B', note:'Volume game. Thin margin but strong relationships.' },
-];
+const PRODUCTS = [];
 
-const TRACE_PRINTS = [
-  { cusip:'3130B2KT4', issuer:'FHLB 5.25% 2029c', type:'Agency Callable', par:500000, price:99.875, yield:5.28, time:'10:38am' },
-  { cusip:'345397YV4', issuer:'Ford Motor 5.95% 2031', type:'IG Corporate', par:250000, price:100.125, yield:5.91, time:'10:22am' },
-  { cusip:'64966EYM1', issuer:'NY MTA 3.95% 2033', type:'Muni Revenue', par:100000, price:99.500, yield:4.01, time:'10:11am' },
-  { cusip:'3136G4KR2', issuer:'FNMA 4.99% 2027', type:'Agency Bullet', par:1000000, price:99.950, yield:5.01, time:'9:58am' },
-  { cusip:'912828ZT0', issuer:'UST 4.625% 2026', type:'Treasury', par:2000000, price:99.875, yield:4.68, time:'9:44am' },
-  { cusip:'3134GYN41', issuer:'FHLMC 5.10% 2028c', type:'Agency Callable', par:750000, price:100.000, yield:5.10, time:'9:31am' },
-];
+const TRACE_PRINTS = [];
 
-const NIM2 = [
-  { issuer:'FHLB', cusip:'3130B2KT4', type:'Callable Agency', coupon:5.25, maturity:'04/21/2029', size:'$1.5B', spread:'+68 5yr', isNew:true, time:'9:42am' },
-  { issuer:'FNMA', cusip:'3136G4KR2', type:'Agency Bullet',   coupon:4.99, maturity:'04/21/2027', size:'$2.0B', spread:'+27 3yr', isNew:true, time:'8:15am' },
-  { issuer:'Ford Motor Credit', cusip:'345397YV4', type:'IG Corp', coupon:5.95, maturity:'04/15/2031', size:'$750M', spread:'+148 7yr', isNew:false, time:'Apr 22 3:20pm' },
-  { issuer:'NY MTA', cusip:'64966EYM1', type:'Muni Revenue', coupon:3.95, maturity:'04/01/2033', size:'$500M', spread:'TE +82 7yr', isNew:false, time:'Apr 22 10:05am' },
-  { issuer:'FHLMC', cusip:'3134GYN41', type:'Callable Agency', coupon:5.10, maturity:'04/15/2028', size:'$1.0B', spread:'+61 3yr', isNew:false, time:'Apr 20' },
-];
+const NIM2 = [];
 
-const SIM_NORMS = {
-  'gse-callable':  { name:'Callable Agency',  lo:15, hi:30, typ:22, note:'Off-the-run/longer call = top of range' },
-  'gse-bullet':    { name:'Agency Bullet',     lo:5,  hi:15, typ:9,  note:'On-the-run compresses to low end' },
-  'ig-corp':       { name:'IG Corporate',      lo:20, hi:45, typ:28, note:'Off-the-run, odd lots push higher' },
-  'hy-corp':       { name:'High Yield',        lo:40, hi:80, typ:58, note:'Sourcing premium is real' },
-  'muni-go':       { name:'Muni GO',           lo:25, hi:55, typ:35, note:'Less TRACE transparency' },
-  'muni-rev':      { name:'Muni Revenue',      lo:25, hi:60, typ:38, note:'Issuer complexity adds tolerance' },
-  'treasury-off':  { name:'Off-the-run UST',   lo:1,  hi:6,  typ:3,  note:'Tight; relationship/size-driven' },
-  'term-repo':     { name:'Term Repo',         lo:10, hi:25, typ:18, note:'Rate + collateral haircut = take' },
-};
+let SIM_NORMS = {};
+
+function parseNumericValue(value) {
+  const num = typeof value === 'number' ? value : parseFloat(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function getClientValue(p) {
+  if (p.clientValue != null) return p.clientValue;
+  if (p.clientVal != null) return p.clientVal;
+  return '—';
+}
+
+function getDealerValue(p) {
+  if (p.dealerValue != null) return p.dealerValue;
+  if (p.dealerVal != null) return p.dealerVal;
+  return '—';
+}
+
+function formatClientValue(p) {
+  const raw = getClientValue(p);
+  const num = parseNumericValue(raw);
+  return num != null ? `${num.toFixed(2)}%` : raw;
+}
+
+function formatDealerValue(p) {
+  const raw = getDealerValue(p);
+  const num = parseNumericValue(raw);
+  return num != null ? `$${num.toFixed(2)}` : raw;
+}
+
+function sortValue(v) {
+  const num = parseNumericValue(v);
+  if (num != null) return num;
+  return {'A': 3, 'B': 2, 'C': 1}[v] || 0;
+}
+
+function chipCls(v) { return v==='A'?'cg':v==='B'?'ca':v==='C'?'cr':'cb'; }
+
+const YC_CHARTS = {};
+
+function yieldRangeLabel(ladder) {
+  const ys = (ladder || []).map(m => m.customerYield).filter(v => v != null);
+  if (ys.length === 0) return '—';
+  if (ys.length === 1) return `${ys[0].toFixed(2)}%`;
+  const lo = Math.min(...ys), hi = Math.max(...ys);
+  return `${lo.toFixed(2)}–${hi.toFixed(2)}%`;
+}
+
+function renderYieldCurves(items) {
+  const grid = document.getElementById('yc-grid');
+  if (!grid) return;
+  Object.values(YC_CHARTS).forEach(c => c.destroy());
+  for (const k of Object.keys(YC_CHARTS)) delete YC_CHARTS[k];
+  const eligible = items.filter(p => Array.isArray(p.maturityLadder) && p.maturityLadder.length >= 2);
+  if (eligible.length === 0) {
+    grid.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:.5rem">No products with multiple maturities to plot.</div>';
+    return;
+  }
+  grid.innerHTML = eligible.map(p => `
+    <div class="yc-card">
+      <div class="yc-title">${p.name}</div>
+      <div class="yc-sub">${p.sub} · spread to UST embedded</div>
+      <div class="yc-canvas-wrap"><canvas id="yc-${p.id}"></canvas></div>
+    </div>`).join('');
+  eligible.forEach(p => {
+    const ctx = document.getElementById(`yc-${p.id}`);
+    if (!ctx) return;
+    const labels = p.maturityLadder.map(m => m.label);
+    const data = p.maturityLadder.map(m => m.customerYield);
+    YC_CHARTS[p.id] = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets: [{
+        data, borderColor: '#c8a96e', backgroundColor: 'rgba(200,169,110,0.12)',
+        tension: 0.25, fill: true, pointRadius: 3, pointBackgroundColor: '#c8a96e', borderWidth: 2
+      }]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.parsed.y?.toFixed(2)}%` } } },
+        scales: {
+          x: { ticks: { color: '#8a96b8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+          y: { ticks: { color: '#8a96b8', font: { size: 10 }, callback: v => v.toFixed(2) + '%' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+        }
+      }
+    });
+  });
+}
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 function showPage(id, btn) {
@@ -437,56 +508,74 @@ function getFiltered() {
   const s=document.getElementById('inv-sort')?.value||'markup';
   if (s==='markup') return [...items].sort((a,b)=>b.streetTypical-a.streetTypical);
   if (s==='spread') return [...items].sort((a,b)=>b.streetHigh-a.streetHigh);
-  return [...items].sort((a,b)=>({'A':0,'B':1,'C':2}[a.clientVal]-{'A':0,'B':1,'C':2}[b.clientVal]));
+  return [...items].sort((a,b)=>sortValue(getClientValue(b)) - sortValue(getClientValue(a)));
 }
 
-function chipCls(v) { return v==='A'?'cg':v==='B'?'ca':'cr'; }
 function mkColor(bps) { return bps>30?'mf-a':bps>15?'mf-a':'mf-g'; }
 
 function renderInventory() {
   const items=getFiltered();
-  const avg=+(items.reduce((s,p)=>s+p.streetTypical,0)/items.length).toFixed(0);
-  const bestBD=items.filter(p=>p.dealerVal==='A').sort((a,b)=>b.streetTypical-a.streetTypical)[0];
-  const bestCL=items.filter(p=>p.clientVal==='A').sort((a,b)=>b.streetHigh-a.streetHigh)[0];
-  document.getElementById('s-avgmk').textContent=avg+' bps';
+  const avg=items.length > 0 ? +(items.reduce((s,p)=>s+p.streetTypical,0)/items.length).toFixed(0) : 0;
+  const bestBD=items.length > 0 ? items.sort((a,b)=>sortValue(getDealerValue(b))-sortValue(getDealerValue(a)))[0] : null;
+  const bestCL=items.length > 0 ? items.sort((a,b)=>sortValue(getClientValue(b))-sortValue(getClientValue(a)))[0] : null;
+  document.getElementById('s-avgmk').textContent=items.length > 0 ? avg+' bps' : '—';
   document.getElementById('s-bestbd').textContent=bestBD?.name||'—';
-  document.getElementById('s-bestbd-sub').textContent=bestBD?'~'+bestBD.streetTypical+' bps typical':'—';
+  document.getElementById('s-bestbd-sub').textContent=bestBD?'~'+formatDealerValue(bestBD):'—';
   document.getElementById('s-bestcl').textContent=bestCL?.name||'—';
   if (curve) {
     document.getElementById('s-2yr').textContent=(curve['2yr']?.yield.toFixed(2)||'—')+'%';
     document.getElementById('s-10yr').textContent=(curve['10yr']?.yield.toFixed(2)||'—')+'%';
   }
 
-  document.getElementById('inv-table').innerHTML=`
-    <thead><tr>
-      <th>Product</th><th class="sorted">Markup typical</th><th>Street range</th>
-      <th>Client value</th><th>BD value</th><th>Liquidity note</th>
-    </tr></thead>
-    <tbody>${items.map(p=>`
-      <tr>
-        <td><div style="font-weight:500">${p.name}</div><div style="font-size:11px;color:var(--text3)">${p.sub}</div></td>
-        <td>
-          <div class="mk-cell">
-            <span class="mono" style="color:var(--amber)">~${p.streetTypical} bps</span>
-            <div class="mk-track"><div class="mk-fill ${mkColor(p.streetTypical)}" style="width:${Math.min(p.streetTypical/80*100,100)}%"></div></div>
-          </div>
-        </td>
-        <td class="mono" style="color:var(--text2)">${p.streetLow}–${p.streetHigh} bps</td>
-        <td><span class="chip ${chipCls(p.clientVal)}">${p.clientVal}</span></td>
-        <td><span class="chip ${chipCls(p.dealerVal)}">${p.dealerVal}</span></td>
-        <td style="font-size:12px;color:var(--text3)">${p.note}</td>
-      </tr>
-    `).join('')}</tbody>`;
+  // Update sidebar counts
+  document.getElementById('sb-all').textContent = PRODUCTS.length;
+  document.getElementById('sb-gse').textContent = PRODUCTS.filter(p=>p.cat==='gse').length;
+  document.getElementById('sb-corp').textContent = PRODUCTS.filter(p=>p.cat==='corp').length;
+  document.getElementById('sb-muni').textContent = PRODUCTS.filter(p=>p.cat==='muni').length;
+  document.getElementById('sb-repo').textContent = PRODUCTS.filter(p=>p.cat==='repo').length;
 
-  document.getElementById('opp-list').innerHTML=items.filter(p=>p.dealerVal==='A').slice(0,4).map(p=>`
-    <div class="opp-item">
-      <div class="opp-head"><div class="opp-name">${p.name}</div><div class="opp-mk">+${p.streetTypical} bps</div></div>
-      <div class="opp-sub">${p.sub}</div>
-      <div class="opp-meta">
-        <div class="om">Range: <span>${p.streetLow}–${p.streetHigh}</span></div>
-        <div class="om">Client: <span>${p.clientVal}</span></div>
-      </div>
-    </div>`).join('');
+  const noProductsMsg = document.getElementById('no-products-message');
+  if (items.length === 0) {
+    document.getElementById('inv-table').innerHTML='<tbody><tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text3)">No products available.</td></tr></tbody>';
+    noProductsMsg.style.display = 'block';
+  } else {
+
+    noProductsMsg.style.display = 'none';
+    document.getElementById('inv-table').innerHTML=`
+      <thead><tr>
+        <th>Product / maturity</th><th>Coupon</th><th class="sorted">Markup typical</th><th>Street range</th>
+        <th>Customer yield</th><th>Dealer $/bond</th><th>Liquidity note</th>
+      </tr></thead>
+      <tbody>${items.map(p=>{
+        const ladder = Array.isArray(p.maturityLadder) ? p.maturityLadder : [];
+        return `
+        <tr class="product-row">
+          <td><div style="font-weight:500">${p.name}</div><div style="font-size:11px;color:var(--text3)">${p.sub}</div></td>
+          <td class="mono" style="color:var(--text2)">${ladder.length ? ladder[0].couponLabel : '—'}</td>
+          <td>
+            <div class="mk-cell">
+              <span class="mono" style="color:var(--amber)">~${p.streetTypical} bps</span>
+              <div class="mk-track"><div class="mk-fill ${mkColor(p.streetTypical)}" style="width:${Math.min(p.streetTypical/80*100,100)}%"></div></div>
+            </div>
+          </td>
+          <td class="mono" style="color:var(--text2)">${p.streetLow}–${p.streetHigh} bps</td>
+          <td class="mono" style="color:var(--gold2)">${yieldRangeLabel(ladder)}</td>
+          <td>${formatDealerValue(p)}</td>
+          <td style="font-size:12px;color:var(--text3)">${p.note}</td>
+        </tr>
+        ${ladder.map((item, i) => `
+          <tr class="ladder-row${i === ladder.length - 1 ? ' last-rung' : ''}">
+            <td>${item.label}</td>
+            <td class="mono">${item.couponLabel}</td>
+            <td></td>
+            <td></td>
+            <td class="mono" style="color:var(--gold2)">${item.customerYieldLabel}</td>
+            <td class="mono">${item.dealerValueLabel}</td>
+            <td></td>
+          </tr>`).join('')}
+      `;}).join('')}</tbody>`;
+  }
+  renderYieldCurves(items);
 
   document.getElementById('alerts-list').innerHTML=`
     <div class="alert-item"><div class="alert-dot ad-a"></div><div class="alert-body"><div class="alert-title">FHLB new issue — 5.25% 2029c at +68 5yr</div><div class="alert-time">Today 9:42am · NIM2</div></div></div>
@@ -517,7 +606,7 @@ function runSim() {
     <div><div class="so-label">Client ceiling</div><div class="so-val">${adjHi} bps</div></div>`;
   document.getElementById('norms-table').innerHTML=`
     <thead><tr><th>Product</th><th>Low</th><th>High</th><th>Typical</th><th>Note</th></tr></thead>
-    <tbody>${Object.entries(SIM_NORMS).map(([k,n])=>`
+    <tbody>${Object.keys(SIM_NORMS).length === 0 ? '<tr><td colspan="5" style="text-align:center;padding:1rem;color:var(--text3)">No norms available</td></tr>' : Object.entries(SIM_NORMS).map(([k,n])=>`
       <tr style="${k===prod?'background:var(--bg3)':''}">
         <td style="font-weight:${k===prod?500:400}">${n.name}</td>
         <td class="mono">${n.lo}</td><td class="mono">${n.hi}</td>
@@ -527,32 +616,40 @@ function runSim() {
 }
 
 function renderTrace() {
-  document.getElementById('trace-log').innerHTML=TRACE_PRINTS.map(t=>`
-    <div class="feed-row">
-      <div><div class="mono" style="font-size:12px">${t.cusip}</div><div style="font-size:11px;color:var(--text3)">${t.issuer}</div></div>
-      <div style="font-size:12px;color:var(--text2)">${t.type}</div>
-      <div class="mono">$${(t.par/1000).toFixed(0)}K</div>
-      <div class="mono">${t.price.toFixed(3)}</div>
-      <div class="mono" style="color:var(--blue)">${t.yield.toFixed(2)}%</div>
-      <div style="font-size:12px;color:var(--text3)">${t.time}</div>
-      <div><button class="refresh-pill" style="font-size:11px;padding:3px 8px">Load</button></div>
-    </div>`).join('');
+  if (TRACE_PRINTS.length === 0) {
+    document.getElementById('trace-log').innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">No TRACE prints available</div>';
+  } else {
+    document.getElementById('trace-log').innerHTML=TRACE_PRINTS.map(t=>`
+      <div class="feed-row">
+        <div><div class="mono" style="font-size:12px">${t.cusip}</div><div style="font-size:11px;color:var(--text3)">${t.issuer}</div></div>
+        <div style="font-size:12px;color:var(--text2)">${t.type}</div>
+        <div class="mono">$${(t.par/1000).toFixed(0)}K</div>
+        <div class="mono">${t.price.toFixed(3)}</div>
+        <div class="mono" style="color:var(--blue)">${t.yield.toFixed(2)}%</div>
+        <div style="font-size:12px;color:var(--text3)">${t.time}</div>
+        <div><button class="refresh-pill" style="font-size:11px;padding:3px 8px">Load</button></div>
+      </div>`).join('');
+  }
 }
 
 function renderNIM2() {
-  document.getElementById('nim2-log').innerHTML=NIM2.map(n=>`
-    <div class="feed-row">
-      <div><div style="font-weight:500">${n.issuer}</div><div class="mono" style="font-size:11px;color:var(--text3)">${n.cusip}</div></div>
-      <div style="font-size:12px;color:var(--text2)">${n.type}</div>
-      <div class="mono">${n.coupon.toFixed(2)}%</div>
-      <div class="mono" style="font-size:12px">${n.maturity}</div>
-      <div class="mono">${n.size}</div>
-      <div style="font-size:12px;color:var(--blue)">${n.spread}</div>
-      <div style="display:flex;align-items:center;gap:5px">
-        ${n.isNew?'<span class="chip ca" style="font-size:10px">New</span>':''}
-        <button class="refresh-pill" style="font-size:11px;padding:3px 8px">Queue</button>
-      </div>
-    </div>`).join('');
+  if (NIM2.length === 0) {
+    document.getElementById('nim2-log').innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">No NIM2 feed available</div>';
+  } else {
+    document.getElementById('nim2-log').innerHTML=NIM2.map(n=>`
+      <div class="feed-row">
+        <div><div style="font-weight:500">${n.issuer}</div><div class="mono" style="font-size:11px;color:var(--text3)">${n.cusip}</div></div>
+        <div style="font-size:12px;color:var(--text2)">${n.type}</div>
+        <div class="mono">${n.coupon.toFixed(2)}%</div>
+        <div class="mono" style="font-size:12px">${n.maturity}</div>
+        <div class="mono">${n.size}</div>
+        <div style="font-size:12px;color:var(--blue)">${n.spread}</div>
+        <div style="display:flex;align-items:center;gap:5px">
+          ${n.isNew?'<span class="chip ca" style="font-size:10px">New</span>':''}
+          <button class="refresh-pill" style="font-size:11px;padding:3px 8px">Queue</button>
+        </div>
+      </div>`).join('');
+  }
 }
 
 async function loadOutlookInt() {
@@ -589,9 +686,33 @@ async function refreshOutlookInt() {
   }
 }
 
+async function loadProducts() {
+  try {
+    const data = await apiFetch('/api/internal/products', true);
+    console.log('Products data:', data);
+    if (!data || !Array.isArray(data.products)) {
+      throw new Error('Invalid product payload from backend');
+    }
+    PRODUCTS.splice(0, PRODUCTS.length, ...data.products);
+    // Build SIM_NORMS from PRODUCTS
+    SIM_NORMS = {};
+    PRODUCTS.forEach(p => {
+      SIM_NORMS[p.id] = { name: p.name, lo: p.streetLow, hi: p.streetHigh, typ: p.streetTypical, note: p.note };
+    });
+    renderInventory();
+    runSim();
+  } catch(e) {
+    console.error('Failed to load products:', e);
+    document.getElementById('inv-table').innerHTML = '<tbody><tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text3)">Unable to load products. Check backend or internal API token.</td></tr></tbody>';
+    document.getElementById('no-products-message').textContent = 'Unable to load products. Check backend or internal API token.';
+    document.getElementById('no-products-message').style.display = 'block';
+  }
+}
+
 async function loadCurve() {
   try {
     const data=await apiFetch('/api/curve');
+    console.log('Curve data:', data);
     curve=data.curve;
     renderInventory();
     if (curve) {
@@ -602,6 +723,7 @@ async function loadCurve() {
       if (y2&&y10) document.getElementById('int-2s10s').textContent='2s10s +'+(((y10-y2)*100).toFixed(0))+'bp';
     }
   } catch(e) {
+    console.error('Failed to load curve:', e);
     // Use mock curve so page works standalone
     curve = { '1mo':{yield:4.35},'3mo':{yield:4.32},'6mo':{yield:4.18},'1yr':{yield:4.02},'2yr':{yield:3.82},'3yr':{yield:3.90},'5yr':{yield:4.05},'7yr':{yield:4.18},'10yr':{yield:4.30},'20yr':{yield:4.65},'30yr':{yield:4.88} };
     document.getElementById('int-sofr').textContent='SOFR ~4.31%';
@@ -621,6 +743,7 @@ function startClock() {
 function initApp() {
   startClock();
   loadCurve();
+  loadProducts();
   renderInventory();
   runSim();
   renderTrace();
