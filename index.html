@@ -50,6 +50,8 @@ nav { display:flex;gap:1px; }
 .nav-btn.active { background:var(--bg3);color:var(--blue); }
 .topbar-right { font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text3);display:flex;gap:14px;align-items:center; }
 .live-dot::before { content:'● ';color:var(--green);font-size:9px; }
+.client-link { font-family:'IBM Plex Sans',sans-serif;font-size:11px;color:var(--gold);text-decoration:none;border:1px solid rgba(200,169,110,.35);padding:4px 10px;border-radius:var(--r);transition:all .12s;letter-spacing:.04em; }
+.client-link:hover { background:rgba(200,169,110,.12);border-color:var(--gold);color:var(--gold2); }
 
 /* ── Layout ── */
 .layout { display:flex;height:calc(100vh - 50px); }
@@ -99,6 +101,31 @@ nav { display:flex;gap:1px; }
 .yc-title { font-size:12px;font-weight:500;color:var(--text);margin-bottom:2px; }
 .yc-sub { font-size:10px;color:var(--text3);margin-bottom:6px; }
 .yc-canvas-wrap { position:relative;height:130px; }
+
+/* ── Market color cards (internal) ── */
+.mc-grid-int { display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px; }
+.mc-card-int { background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px; }
+.mc-head-int { display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px; }
+.mc-name-int { font-size:13px;font-weight:500;color:var(--text); }
+.mc-snap-int { font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text3); }
+.mc-row-int { display:flex;gap:12px;margin-bottom:6px;flex-wrap:wrap;font-size:11px;color:var(--text2); }
+.mc-row-int b { color:var(--text);font-weight:500;font-family:'IBM Plex Mono',monospace; }
+.mc-row-int .up { color:var(--green); } .mc-row-int .dn { color:var(--red); } .mc-row-int .fl { color:var(--text3); }
+.mc-blurb-int { font-size:12.5px;color:var(--text2);line-height:1.55; }
+
+/* ── Central bank cards (internal) ── */
+.cb-grid-int { display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px; }
+.cb-card-int { background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px; }
+.cb-head-int { display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px; }
+.cb-name-int { font-size:13px;font-weight:500;color:var(--text); }
+.cb-rate-int { font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--gold2);font-weight:500; }
+.cb-line-int { font-size:12px;line-height:1.55;margin-bottom:6px;color:var(--text2); }
+.cb-label-int { color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:500; }
+
+/* ── Forwards / risk strip ── */
+.fwd-strip-int { background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:9px 13px;display:flex;gap:18px;flex-wrap:wrap;align-items:baseline; }
+.fwd-strip-int .fl { font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em; }
+.fwd-strip-int .fv { font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--gold2);font-weight:500;margin-right:10px; }
 
 /* ── Chips ── */
 .chip { display:inline-block;font-size:11px;font-weight:500;padding:2px 7px;border-radius:3px; }
@@ -204,6 +231,7 @@ nav { display:flex;gap:1px; }
     </nav>
   </div>
   <div class="topbar-right">
+    <a href="/client" target="_blank" class="client-link" title="Open the client-facing site in a new tab">Client view ↗</a>
     <span class="live-dot">LIVE</span>
     <span id="int-sofr">SOFR —</span>
     <span id="int-2s10s">2s10s —</span>
@@ -263,9 +291,11 @@ nav { display:flex;gap:1px; }
         <div id="yc-grid" class="yc-grid"></div>
       </div>
 
-      <div class="two-col">
-        <div class="panel"><div class="panel-title">Top markup opportunities</div><div id="opp-list"></div></div>
-        <div class="panel"><div class="panel-title">Alerts &amp; flags <button class="panel-action">Clear all</button></div><div id="alerts-list"></div></div>
+      <div class="panel" style="margin-bottom:1.25rem">
+        <div class="panel-title">
+          Top opportunities <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px">— rungs trading widest vs trailing 30d average (cheapest entry)</span>
+        </div>
+        <div id="opp-list"></div>
       </div>
     </div>
 
@@ -340,13 +370,48 @@ nav { display:flex;gap:1px; }
 
     <!-- OUTLOOK INTERNAL -->
     <div class="page" id="page-outlook-int">
-      <div class="panel">
+      <!-- Overnight color -->
+      <div class="panel" style="margin-bottom:1rem">
         <div class="panel-title">
-          AI Economic Outlook — Internal view
-          <button class="refresh-pill" onclick="refreshOutlookInt()">Force refresh</button>
+          Overnight bond market color
+          <button class="refresh-pill" onclick="refreshMarketColorInt()">Force refresh</button>
         </div>
-        <div id="curve-strip-int" class="curve-strip-int"></div>
-        <div id="outlook-int-body"><div style="color:var(--text3);font-style:italic">Loading...</div></div>
+        <div id="ov-blurb-int" style="font-size:13px;color:var(--text);line-height:1.65"><span style="color:var(--text3);font-style:italic">Loading…</span></div>
+        <div id="ov-strip-int" class="fwd-strip-int" style="margin-top:12px"></div>
+      </div>
+
+      <!-- Economic outlook -->
+      <div class="panel" style="margin-bottom:1rem">
+        <div class="panel-title">
+          Economic outlook
+          <span id="eo-sub-int" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px">FRED · curve forwards · BBC/CNBC/WSJ/MarketWatch RSS</span>
+        </div>
+        <div id="eo-blurb-int" style="font-size:13px;color:var(--text);line-height:1.65"><span style="color:var(--text3);font-style:italic">Loading…</span></div>
+        <div id="eo-strip-int" class="fwd-strip-int" style="margin-top:12px"></div>
+        <div id="eo-risk-int" class="fwd-strip-int" style="margin-top:8px"></div>
+        <div style="margin-top:14px">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:6px">Headlines feeding the outlook</div>
+          <div id="eo-news-int" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px;font-size:12px;line-height:1.45"></div>
+        </div>
+      </div>
+
+      <!-- Market color by asset class -->
+      <div class="panel" style="margin-bottom:1rem">
+        <div class="panel-title">Market color by asset class</div>
+        <div id="mc-grid-int" class="mc-grid-int"></div>
+      </div>
+
+      <!-- Central bank outlook -->
+      <div class="panel" style="margin-bottom:1rem">
+        <div class="panel-title">Central bank outlook</div>
+        <div id="cb-grid-int" class="cb-grid-int"></div>
+        <div id="fwd-strip-int" class="fwd-strip-int" style="margin-top:10px"></div>
+      </div>
+
+      <!-- Global value (cross-border) -->
+      <div class="panel">
+        <div class="panel-title">Global value — US bonds vs the world</div>
+        <table class="dt" id="cb-table-int"></table>
       </div>
     </div>
 
@@ -589,7 +654,7 @@ function showPage(id, btn) {
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   btn.classList.add('active');
-  if (id==='outlook-int') loadOutlookInt();
+  if (id==='outlook-int') loadMarketColorInt();
   if (id==='trace') loadTrace();
   if (id==='nim2') loadNewIssues();
 }
@@ -704,12 +769,42 @@ function renderInventory() {
   }
   renderYieldCurves(items);
 
-  document.getElementById('alerts-list').innerHTML=`
-    <div class="alert-item"><div class="alert-dot ad-a"></div><div class="alert-body"><div class="alert-title">FHLB new issue — 5.25% 2029c at +68 5yr</div><div class="alert-time">Today 9:42am · NIM2</div></div></div>
-    <div class="alert-item"><div class="alert-dot ad-a"></div><div class="alert-body"><div class="alert-title">FNMA bullet 4.99% 2027 — $2B deal priced</div><div class="alert-time">Today 8:15am · NIM2</div></div></div>
-    <div class="alert-item"><div class="alert-dot ad-g"></div><div class="alert-body"><div class="alert-title">Term repo volume +18% vs 30d avg</div><div class="alert-time">Daily summary</div></div></div>
-    <div class="alert-item"><div class="alert-dot ad-r"></div><div class="alert-body"><div class="alert-title">Muni revenue markup near upper street range</div><div class="alert-time">Compliance flag</div></div></div>
-    <div class="alert-item"><div class="alert-dot ad-b"></div><div class="alert-body"><div class="alert-title">2s10s back to +50 bps — curve re-steepening</div><div class="alert-time">Today 10:18am</div></div></div>`;
+  populateOpportunities(items);
+}
+
+// Top opportunities: rungs sorted by how cheap they are vs trailing 30d avg.
+// Real ranking from live data — no static content.
+function populateOpportunities(items) {
+  const el = document.getElementById('opp-list');
+  if (!el) return;
+  const allRungs = [];
+  (items || PRODUCTS).forEach(p => (p.maturityLadder || []).forEach(r => {
+    if (r.vsAvg30Bps != null) allRungs.push({ ...r, productId: p.id, productName: p.name, productSub: p.sub });
+  }));
+  if (allRungs.length === 0) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:.5rem 0">No live OAS coverage right now.</div>';
+    return;
+  }
+  // Highest vsAvg30Bps = wider spread vs recent typical = cheapest entry
+  allRungs.sort((a, b) => b.vsAvg30Bps - a.vsAvg30Bps);
+  const top = allRungs.slice(0, 5);
+  el.innerHTML = top.map(r => {
+    const sign = r.vsAvg30Bps >= 0 ? '+' : '';
+    const tone = r.vsAvg30Bps >= 0 ? 'var(--green)' : 'var(--red)';
+    return `
+    <div class="opp-item">
+      <div class="opp-head">
+        <div class="opp-name">${r.productName} · ${r.label}</div>
+        <div class="opp-mk" style="color:${tone}">${sign}${r.vsAvg30Bps}bp vs 30d</div>
+      </div>
+      <div class="opp-sub">${r.productSub}</div>
+      <div class="opp-meta">
+        <span class="om">Customer yield <span>${r.customerYieldLabel||'—'}</span></span>
+        <span class="om">Spread vs UST <span>${r.spreadLabel||'—'}</span></span>
+        <span class="om">Value <span>${r.valueLabel||'—'}</span></span>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function runSim() {
@@ -817,37 +912,178 @@ async function loadNewIssues() {
   }
 }
 
-async function loadOutlookInt() {
-  const body=document.getElementById('outlook-int-body');
-  if (body.dataset.loaded) return;
-  body.dataset.loaded='1';
-  try {
-    const data=await apiFetch('/api/outlook');
-    if (data.curveSnapshot) {
-      document.getElementById('curve-strip-int').innerHTML=Object.entries(data.curveSnapshot).map(([k,v])=>`
-        <div class="cp"><div class="cp-l">${k}</div><div class="cp-y">${v.yield.toFixed(2)}%</div></div>`).join('');
+// ─── Internal market-color (mirrors /client — same data, same synthesis) ────
+function decodeNewsTitle(s) {
+  return (s||'').replace(/&apos;/g,"'").replace(/&#x2018;/g,'‘').replace(/&#x2019;/g,'’')
+                .replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+}
+
+function renderMarketColorInt(mc) {
+  if (!mc) return;
+  const syn = mc.synthesis || {};
+  const blurbs = (syn && !syn.parseError) ? (syn.assetBlurbs || {}) : {};
+  const cbSyn  = (syn && !syn.parseError) ? (syn.centralBanks || {}) : {};
+
+  // Overnight color
+  const ust = mc.ust?.curve || {};
+  const ecb = mc.ecbCurve || {};
+  const overnight = (syn && !syn.parseError) ? (syn.overnightColor || '') : '';
+  const ovBlurb = document.getElementById('ov-blurb-int');
+  if (ovBlurb) ovBlurb.innerHTML = overnight || '<span style="color:var(--text3);font-style:italic">Commentary unavailable.</span>';
+  const fmtDelta = (bps) => bps == null ? '<span style="color:var(--text3)">—</span>'
+    : `<span style="color:${bps>0?'var(--green)':bps<0?'var(--red)':'var(--text3)'};font-size:11px;margin-left:4px">${bps>=0?'+':''}${bps}bp</span>`;
+  const tenorBps = (entry) => Number.isFinite(entry?.chg1d) ? Math.round(entry.chg1d * 100) : null;
+  const ovStrip = document.getElementById('ov-strip-int');
+  if (ovStrip) {
+    const ustParts = ['2yr','5yr','10yr','30yr'].map(t => `<span><span class="fl">UST ${t}</span> <span class="fv">${ust[t]?.yield?.toFixed(2)||'—'}%</span> ${fmtDelta(tenorBps(ust[t]))}</span>`).join('');
+    const ecbParts = ['2yr','10yr'].map(t => `<span><span class="fl">EZ ${t}</span> <span class="fv">${ecb[t]?.yield?.toFixed(2)||'—'}%</span> ${fmtDelta(tenorBps(ecb[t]))}</span>`).join('');
+    ovStrip.innerHTML = `<span class="fl" style="margin-right:8px">Overnight session moves</span>${ustParts}${ecbParts}<span class="fl" style="margin-left:auto">vs ${ust['10yr']?.priorDate || ''}</span>`;
+  }
+
+  // Economic outlook
+  const eo = (syn && !syn.parseError) ? (syn.economicOutlook || '') : '';
+  const eoBlurb = document.getElementById('eo-blurb-int');
+  if (eoBlurb) eoBlurb.innerHTML = eo || '<span style="color:var(--text3);font-style:italic">Outlook unavailable.</span>';
+  const eoStrip = document.getElementById('eo-strip-int');
+  if (eoStrip) {
+    const fed = mc.policyRates?.fed?.current;
+    const fwds = mc.ust?.impliedForwards || {};
+    eoStrip.innerHTML = `
+      <span><span class="fl">Fed funds</span> <span class="fv">${fed != null ? fed.toFixed(2)+'%' : '—'}</span></span>
+      <span><span class="fl">Fwd 1y in 1y</span> <span class="fv">${fwds['fwd 1y in 1y'] != null ? fwds['fwd 1y in 1y'].toFixed(2)+'%' : '—'}</span></span>
+      <span><span class="fl">Fwd 1y in 2y</span> <span class="fv">${fwds['fwd 1y in 2y'] != null ? fwds['fwd 1y in 2y'].toFixed(2)+'%' : '—'}</span></span>
+      <span><span class="fl">10y UST</span> <span class="fv">${ust['10yr']?.yield?.toFixed(2)||'—'}%</span></span>
+      <span><span class="fl">2s10s</span> <span class="fv">${mc.ust?.spread2s10s != null ? (mc.ust.spread2s10s*100>=0?'+':'')+(mc.ust.spread2s10s*100).toFixed(0)+'bp' : '—'}</span></span>`;
+  }
+  const eoRisk = document.getElementById('eo-risk-int');
+  if (eoRisk) {
+    const risk = mc.risk || {};
+    const riskCell = (key, fmt) => {
+      const r = risk[key]; if (!r) return '';
+      const chg = r.chg1d;
+      const chgStr = chg == null ? '' : `<span style="color:${chg>0?'var(--green)':chg<0?'var(--red)':'var(--text3)'};font-size:11px;margin-left:4px">${chg>=0?'+':''}${fmt(chg)}</span>`;
+      return `<span><span class="fl">${r.label}</span> <span class="fv">${r.unit}${fmt(r.current)}</span>${chgStr}</span>`;
+    };
+    const f2 = v => Number(v).toFixed(2);
+    eoRisk.innerHTML = ['brent','wti','vix','breakeven10','breakeven5'].map(k => riskCell(k, f2)).filter(Boolean).join('') + `<span class="fl" style="margin-left:auto">supporting risk indicators (1d Δ)</span>`;
+  }
+  const eoNews = document.getElementById('eo-news-int');
+  if (eoNews) {
+    const newsList = mc.marketNews || [];
+    if (!newsList.length) {
+      eoNews.innerHTML = '<span style="color:var(--text3);font-size:11px">No headlines loaded.</span>';
+    } else {
+      eoNews.innerHTML = newsList.slice(0, 12).map(h => {
+        const date = h.date ? new Date(h.date).toLocaleDateString() : '';
+        return `<div style="padding:6px 9px;background:var(--bg3);border-radius:6px"><div style="color:var(--text3);font-size:10px">${h.source}${date?' · '+date:''}</div><div style="color:var(--text)">${decodeNewsTitle(h.title)}</div></div>`;
+      }).join('');
     }
-    const text=data.text||'';
-    const sections=['MARKET SNAPSHOT','FED POLICY OUTLOOK','INFLATION & GROWTH','FIXED INCOME STRATEGY','KEY RISKS TO WATCH'];
-    let html=text;
-    sections.forEach(s=>{html=html.replace(new RegExp(`(${s})`,'g'),`<div class="outlook-section-title">$1</div>`);});
-    html=html.replace(/\n\n/g,'</p><p>').replace(/\n/g,' ');
-    body.innerHTML=`<div class="outlook-body-int"><p>${html}</p></div>
-      <div style="font-size:11px;color:var(--text3);margin-top:1rem">Generated: ${data.generatedAt?new Date(data.generatedAt).toLocaleString():''}</div>`;
-  } catch(e) {
-    body.innerHTML='<div style="color:var(--text3);font-style:italic">Could not load outlook — check backend.</div>';
+  }
+
+  // Market color cards
+  const grid = document.getElementById('mc-grid-int');
+  if (grid) {
+    grid.innerHTML = (mc.assets || []).map(a => {
+      const s = a.snap;
+      const arrow = (n) => n == null ? '<span class="fl">—</span>' : `<span class="${n>0?'dn':n<0?'up':'fl'}">${n>=0?'+':''}${n}bp</span>`;
+      const valueChip = (lbl, cls) => lbl ? `<span class="chip ${cls}" style="margin-left:6px">${lbl}</span>` : '';
+      const head = s ? `${s.currentBps}bp OAS ${valueChip(s.valueLabel, s.valueCls)}` : '<span style="color:var(--text3)">narrative</span>';
+      const numerics = s ? `
+        <div class="mc-row-int">
+          <span>vs 30d avg <b>${s.avg30Bps}bp</b> · ${arrow(s.vsAvg30Bps)}</span>
+          <span>last week ${arrow(s.chg1wBps)}</span>
+          <span>last month ${arrow(s.chg1mBps)}</span>
+          <span>90d avg <b>${s.avg90Bps}bp</b></span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">30d range ${s.rangeMin30Bps}–${s.rangeMax30Bps}bp · positive Δ = wider spreads (cheaper)</div>` : '';
+      const blurb = blurbs[a.id] || '<span style="color:var(--text3);font-style:italic">No commentary.</span>';
+      return `
+      <div class="mc-card-int">
+        <div class="mc-head-int"><div class="mc-name-int">${a.name}</div><div class="mc-snap-int">${head}</div></div>
+        ${numerics}
+        <div class="mc-blurb-int">${blurb}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Central bank cards
+  const cbGrid = document.getElementById('cb-grid-int');
+  if (cbGrid) {
+    const policy = mc.policyRates || {};
+    const cbConfigs = [
+      { id:'fed', label:'Federal Reserve',  rate: policy.fed?.current,  rateLabel:'Fed funds (DFF)' },
+      { id:'ecb', label:'European Central Bank', rate: policy.ecb?.current, rateLabel:'Deposit facility' },
+      { id:'boe', label:'Bank of England',  rate: policy.boe?.current,  rateLabel:'SONIA' },
+    ];
+    cbGrid.innerHTML = cbConfigs.map(cb => {
+      const s = cbSyn[cb.id] || {};
+      return `
+      <div class="cb-card-int">
+        <div class="cb-head-int">
+          <div class="cb-name-int">${cb.label}</div>
+          <div class="cb-rate-int">${cb.rate != null ? cb.rate.toFixed(2)+'%' : '—'} <span style="color:var(--text3);font-size:10px;font-weight:400">${cb.rateLabel}</span></div>
+        </div>
+        <div class="cb-line-int"><span class="cb-label-int">Stance</span><br>${s.stance || '<span style="color:var(--text3)">—</span>'}</div>
+        <div class="cb-line-int"><span class="cb-label-int">Curve implies</span><br>${s.implied || '<span style="color:var(--text3)">—</span>'}</div>
+        <div class="cb-line-int"><span class="cb-label-int">Watch</span><br>${s.watch || '<span style="color:var(--text3)">—</span>'}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Forwards strip beneath central banks
+  const fwdStrip = document.getElementById('fwd-strip-int');
+  if (fwdStrip) {
+    const fwds = mc.ust?.impliedForwards || {};
+    fwdStrip.innerHTML = `
+      <span class="fl" style="margin-right:8px">UST curve implies (forward rates)</span>
+      ${['fwd 1y in 1y','fwd 1y in 2y','fwd 2y in 3y','fwd 5y in 5y'].map(k =>
+        `<span><span class="fl">${k}</span> <span class="fv">${fwds[k] != null ? fwds[k].toFixed(2)+'%' : '—'}</span></span>`).join('')}
+      <span class="fl" style="margin-left:auto">${fwds.method || ''}</span>`;
+  }
+
+  // Cross-border table
+  const cbTable = document.getElementById('cb-table-int');
+  if (cbTable) {
+    const xb = mc.crossBorder || [];
+    const ust10 = mc.ust?.curve?.['10yr']?.yield;
+    cbTable.innerHTML = `
+      <thead><tr>
+        <th>Region</th><th>Foreign 10y</th><th>US 10y</th>
+        <th>Gross pickup</th><th>Hedge cost (approx)</th>
+        <th>Net hedged pickup</th><th>Source</th>
+      </tr></thead>
+      <tbody>${xb.map(c => `
+        <tr>
+          <td><b>${c.region}</b></td>
+          <td class="mono">${c.foreignYield != null ? c.foreignYield.toFixed(2)+'%' : '—'}</td>
+          <td class="mono">${ust10 != null ? ust10.toFixed(2)+'%' : '—'}</td>
+          <td class="mono" style="color:${c.grossPickup>0?'var(--green)':'var(--red)'}">${c.grossPickup != null ? (c.grossPickup>=0?'+':'')+c.grossPickup.toFixed(2)+'%' : '—'}</td>
+          <td class="mono">${c.hedgeCostPct != null ? (c.hedgeCostPct>=0?'+':'')+c.hedgeCostPct.toFixed(2)+'%' : '<span style="color:var(--text3)">n/a</span>'}</td>
+          <td class="mono" style="color:${c.netHedgedPickup==null?'var(--text3)':c.netHedgedPickup>0?'var(--green)':'var(--red)'}">${c.netHedgedPickup != null ? (c.netHedgedPickup>=0?'+':'')+c.netHedgedPickup.toFixed(2)+'%' : '<span style="color:var(--text3)">unhedged only</span>'}</td>
+          <td style="color:var(--text3);font-size:11px">${c.foreignSource}</td>
+        </tr>`).join('')}</tbody>`;
   }
 }
 
-async function refreshOutlookInt() {
-  const body=document.getElementById('outlook-int-body');
-  delete body.dataset.loaded;
-  body.innerHTML='<div style="color:var(--text3);font-style:italic">Regenerating outlook via Claude...</div>';
+async function loadMarketColorInt() {
   try {
-    await apiPost('/api/internal/outlook/refresh',{},true);
-    loadOutlookInt();
-  } catch(e) {
-    body.innerHTML='<div style="color:var(--red)">Refresh failed. Check API key and backend.</div>';
+    const data = await apiFetch('/api/public/market-color');
+    renderMarketColorInt(data);
+  } catch (e) {
+    console.error('market color load failed:', e);
+    const ovBlurb = document.getElementById('ov-blurb-int');
+    if (ovBlurb) ovBlurb.innerHTML = '<span style="color:var(--red)">Could not load market color — backend unavailable.</span>';
+  }
+}
+
+async function refreshMarketColorInt() {
+  const ovBlurb = document.getElementById('ov-blurb-int');
+  if (ovBlurb) ovBlurb.innerHTML = '<span style="color:var(--text3);font-style:italic">Regenerating via Claude…</span>';
+  try {
+    const data = await apiPost('/api/internal/market-color/refresh', {}, true);
+    renderMarketColorInt(data);
+  } catch (e) {
+    if (ovBlurb) ovBlurb.innerHTML = '<span style="color:var(--red)">Refresh failed. Check API key and backend.</span>';
   }
 }
 
@@ -911,6 +1147,7 @@ function initApp() {
   loadProducts();
   loadTrace();
   loadNewIssues();
+  loadMarketColorInt();
   renderInventory();
   runSim();
   renderTrace();
