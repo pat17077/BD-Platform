@@ -421,8 +421,9 @@ nav { display:flex;gap:1px; }
 
 <script>
 // ─── Config ───────────────────────────────────────────────────────────────────
-const API_BASE = 'http://localhost:3001';
-const INTERNAL_TOKEN = 'internal-secret-token'; // match server INTERNAL_TOKEN env var
+// Same-origin in production (relative path); falls back to localhost when opening file:// directly
+const API_BASE = (window.location.protocol === 'file:') ? 'http://localhost:3001' : '';
+const INTERNAL_TOKEN = '270c3508bc9bca1b100e3e056ae9dbb4fb5c52d58730e3295ea664efb45be493'; // must match server INTERNAL_TOKEN env var on Render
 
 // Demo credentials — replace with real auth in production
 const DEMO_CREDS = { desk: 'demo123', admin: 'admin123' };

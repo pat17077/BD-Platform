@@ -248,7 +248,8 @@ footer a:hover { text-decoration:underline; }
 </footer>
 
 <script>
-const API = 'http://localhost:3001';
+// Same-origin in production (relative path); falls back to localhost when opening file:// directly
+const API = (window.location.protocol === 'file:') ? 'http://localhost:3001' : '';
 let DATA = { products: [], offerings: [], curve: null };
 const CHARTS = {};
 const TENOR_YRS = { '1mo':1/12,'3mo':0.25,'6mo':0.5,'1yr':1,'2yr':2,'3yr':3,'5yr':5,'7yr':7,'10yr':10,'20yr':20,'30yr':30 };
