@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spread Desk — Fixed Income Inventory</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg:#fafafa; --bg2:#fff; --bg3:#f3f4f7; --bg4:#e8eaf0;
+  --border:rgba(0,0,0,0.08); --border2:rgba(0,0,0,0.14);
+  --text:#1a1d2c; --text2:#4a5170; --text3:#8089a3;
+  --accent:#1d4ed8; --accent2:#2563eb;
+  --gold:#a8842b; --green:#0f9b5e; --amber:#c0820a; --red:#c53030;
+  --gdim:rgba(15,155,94,0.08); --adim:rgba(192,130,10,0.08); --rdim:rgba(197,48,48,0.08); --bdim:rgba(29,78,216,0.08);
+  --r:8px;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'IBM Plex Sans',sans-serif; background:var(--bg); color:var(--text); font-size:14px; line-height:1.55; }
+header { background:var(--bg2); border-bottom:1px solid var(--border); padding:14px 28px; display:flex; justify-content:space-between; align-items:center; }
+.brand { font-family:'IBM Plex Mono',monospace; font-size:16px; letter-spacing:.04em; color:var(--accent); font-weight:500; }
+.brand-sub { font-size:11px; color:var(--text3); margin-top:2px; }
+.live { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text3); }
+.live::before { content:'● '; color:var(--green); }
+
+main { max-width:1300px; margin:0 auto; padding:24px; }
+
+.intro { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); padding:18px 22px; margin-bottom:18px; }
+.intro h1 { font-size:20px; font-weight:500; margin-bottom:6px; }
+.intro p { color:var(--text2); font-size:13px; }
+
+/* ── Filter bar ── */
+.filters { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); padding:14px 18px; margin-bottom:18px; display:grid; grid-template-columns:repeat(5,1fr) auto; gap:12px; align-items:end; }
+.f-field { display:flex; flex-direction:column; gap:4px; }
+.f-label { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); font-weight:500; }
+.f-input, .f-select { font-family:inherit; font-size:13px; padding:7px 10px; border:1px solid var(--border2); border-radius:var(--r); background:var(--bg2); color:var(--text); outline:none; }
+.f-input:focus, .f-select:focus { border-color:var(--accent); }
+.f-reset { font-size:12px; padding:8px 14px; background:var(--bg3); border:1px solid var(--border2); border-radius:var(--r); cursor:pointer; color:var(--text2); }
+.f-reset:hover { background:var(--bg4); }
+
+/* ── Section ── */
+.section { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); padding:16px 20px; margin-bottom:18px; }
+.section-h { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:14px; }
+.section-h h2 { font-size:14px; font-weight:500; letter-spacing:.02em; color:var(--text); }
+.section-h .sh-sub { font-size:11px; color:var(--text3); }
+
+/* ── Tables ── */
+.tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.tbl th { text-align:left; padding:8px 10px; font-size:10px; font-weight:500; letter-spacing:.06em; text-transform:uppercase; color:var(--text3); border-bottom:1px solid var(--border2); white-space:nowrap; }
+.tbl td { padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.tbl tr:hover td { background:var(--bg3); }
+.mono { font-family:'IBM Plex Mono',monospace; }
+.right { text-align:right; }
+.muted { color:var(--text3); font-size:12px; }
+
+/* ── Chips ── */
+.chip { display:inline-block; font-size:11px; font-weight:500; padding:2px 8px; border-radius:4px; }
+.cg { background:var(--gdim); color:var(--green); }
+.ca { background:var(--adim); color:var(--amber); }
+.cr { background:var(--rdim); color:var(--red); }
+.cb { background:var(--bdim); color:var(--accent); }
+.cn { background:var(--bg3); color:var(--text2); }
+
+/* ── Yield curve grid ── */
+.yc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
+.yc-card { background:var(--bg3); border:1px solid var(--border); border-radius:var(--r); padding:.75rem .9rem; }
+.yc-title { font-size:13px; font-weight:500; margin-bottom:1px; }
+.yc-sub { font-size:10px; color:var(--text3); margin-bottom:6px; }
+.yc-canvas-wrap { position:relative; height:130px; }
+
+/* ── Highlights row ── */
+.hl-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
+.hl-card { background:linear-gradient(180deg, var(--bg2), var(--bg3)); border:1px solid var(--border); border-radius:var(--r); padding:12px 14px; }
+.hl-label { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:.08em; }
+.hl-val { font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:500; margin-top:4px; color:var(--accent); }
+.hl-sub { font-size:11px; color:var(--text2); margin-top:2px; }
+
+/* ── Market color cards ── */
+.mc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:14px; }
+.mc-card { background:linear-gradient(180deg,var(--bg2),var(--bg3)); border:1px solid var(--border); border-radius:var(--r); padding:14px 16px; }
+.mc-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+.mc-name { font-size:13px; font-weight:500; color:var(--text); }
+.mc-snap { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text3); }
+.mc-row { display:flex; gap:12px; margin-bottom:10px; flex-wrap:wrap; }
+.mc-stat { font-size:11px; color:var(--text2); }
+.mc-stat b { color:var(--text); font-weight:500; font-family:'IBM Plex Mono',monospace; }
+.mc-stat.up { color:var(--red); } .mc-stat.dn { color:var(--green); } .mc-stat.fl { color:var(--text3); }
+.mc-blurb { font-size:13px; color:var(--text); line-height:1.6; }
+
+/* ── CB cards ── */
+.cb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:14px; margin-bottom:14px; }
+.cb-card { background:var(--bg3); border:1px solid var(--border); border-radius:var(--r); padding:14px 16px; }
+.cb-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+.cb-name { font-size:13px; font-weight:500; }
+.cb-rate { font-family:'IBM Plex Mono',monospace; font-size:14px; color:var(--accent); font-weight:500; }
+.cb-line { font-size:12px; line-height:1.55; margin-bottom:6px; color:var(--text2); }
+.cb-label { color:var(--text3); font-size:10px; text-transform:uppercase; letter-spacing:.06em; font-weight:500; }
+.fwd-strip { background:var(--bg3); border:1px solid var(--border); border-radius:var(--r); padding:10px 14px; display:flex; gap:18px; flex-wrap:wrap; align-items:baseline; }
+.fwd-strip .fl { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:.05em; }
+.fwd-strip .fv { font-family:'IBM Plex Mono',monospace; font-size:14px; color:var(--accent); font-weight:500; margin-right:14px; }
+
+/* ── Footer ── */
+footer { max-width:1300px; margin:24px auto 32px; padding:0 24px; font-size:11px; color:var(--text3); }
+footer a { color:var(--accent); text-decoration:none; }
+footer a:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="brand">SPREAD DESK</div>
+    <div class="brand-sub">Fixed income offerings · Indicative levels</div>
+  </div>
+  <div class="live" id="updated">Loading…</div>
+</header>
+
+<main>
+  <div class="intro">
+    <h1>Where the value is across fixed income today</h1>
+    <p>Live indicative customer yields by maturity and structure. Filter by what you need; we'll show you what's offered today and where the curve is rich or cheap relative to the trailing year.</p>
+  </div>
+
+  <!-- Overnight color (replaces nothing — sits above highlights for a "what just happened" framing) -->
+  <div class="section">
+    <div class="section-h">
+      <h2>Overnight bond market color</h2>
+      <span class="sh-sub" id="ov-sub">—</span>
+    </div>
+    <div id="ov-blurb" style="font-size:13px;color:var(--text);line-height:1.65"><span class="muted">Loading…</span></div>
+    <div id="ov-strip" class="fwd-strip" style="margin-top:12px"></div>
+  </div>
+
+  <!-- Economic outlook (general) -->
+  <div class="section">
+    <div class="section-h">
+      <h2>Economic outlook</h2>
+      <span class="sh-sub" id="eo-sub">Live FRED indicators · curve-implied Fed path · geopolitical news from BBC/CNBC/WSJ/MarketWatch RSS</span>
+    </div>
+    <div id="eo-blurb" style="font-size:13px;color:var(--text);line-height:1.65"><span class="muted">Loading…</span></div>
+    <div id="eo-strip" class="fwd-strip" style="margin-top:12px"></div>
+    <div id="eo-risk" class="fwd-strip" style="margin-top:8px"></div>
+    <div style="margin-top:12px">
+      <div class="cb-label" style="margin-bottom:6px">Headlines feeding the outlook</div>
+      <div id="eo-news" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px;font-size:12px;line-height:1.45"></div>
+    </div>
+  </div>
+
+  <!-- Highlights -->
+  <div class="hl-grid" id="hl-grid"></div>
+
+  <!-- Market color — per asset class -->
+  <div class="section">
+    <div class="section-h">
+      <h2>Market color by asset class</h2>
+      <span class="sh-sub" id="mc-sub">Loading…</span>
+    </div>
+    <div id="mc-grid" class="mc-grid"></div>
+  </div>
+
+  <!-- Central bank outlook -->
+  <div class="section">
+    <div class="section-h">
+      <h2>Central bank outlook</h2>
+      <span class="sh-sub" id="cb-sub">Live policy rates · curve-implied forward path · most recent press</span>
+    </div>
+    <div id="cb-grid" class="cb-grid"></div>
+    <div id="fwd-strip" class="fwd-strip"></div>
+  </div>
+
+  <!-- Global value (cross-border) -->
+  <div class="section">
+    <div class="section-h">
+      <h2>Global value — US bonds vs the world</h2>
+      <span class="sh-sub">Why a foreign investor might choose US fixed income · hedged math approximation</span>
+    </div>
+    <table class="tbl" id="cb-table"></table>
+    <div id="cb-color" style="margin-top:14px;font-size:13px;color:var(--text2);line-height:1.6"></div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <div class="f-field">
+      <label class="f-label">Asset class</label>
+      <select class="f-select" id="f-class">
+        <option value="all">All</option>
+        <option value="treasury">Treasuries</option>
+        <option value="gse">Agencies (GSE)</option>
+        <option value="corp">Corporates</option>
+        <option value="muni">Munis</option>
+        <option value="repo">Repo / cash</option>
+      </select>
+    </div>
+    <div class="f-field">
+      <label class="f-label">Maturity (yrs, min)</label>
+      <input type="number" class="f-input" id="f-min" placeholder="0" step=".5" min="0">
+    </div>
+    <div class="f-field">
+      <label class="f-label">Maturity (yrs, max)</label>
+      <input type="number" class="f-input" id="f-max" placeholder="30" step=".5" min="0">
+    </div>
+    <div class="f-field">
+      <label class="f-label">Min yield (%)</label>
+      <input type="number" class="f-input" id="f-yield" placeholder="0" step=".1" min="0">
+    </div>
+    <div class="f-field">
+      <label class="f-label">Structure</label>
+      <select class="f-select" id="f-struct">
+        <option value="all">Any</option>
+        <option value="bullet">Bullet only</option>
+        <option value="callable">Callable only</option>
+      </select>
+    </div>
+    <button class="f-reset" onclick="resetFilters()">Reset</button>
+  </div>
+
+  <!-- Live offerings (real per-CUSIP) -->
+  <div class="section">
+    <div class="section-h">
+      <h2>Live offerings</h2>
+      <span class="sh-sub" id="off-sub">—</span>
+    </div>
+    <table class="tbl" id="off-table"></table>
+  </div>
+
+  <!-- Indicative levels by category (live FRED OAS-driven) -->
+  <div class="section">
+    <div class="section-h">
+      <h2>Indicative customer yields by class &amp; tenor</h2>
+      <span class="sh-sub">Live UST CMT + ICE BofA index OAS · 1y percentile shows where current spreads sit</span>
+    </div>
+    <table class="tbl" id="ind-table"></table>
+  </div>
+
+  <!-- Yield curves -->
+  <div class="section">
+    <div class="section-h">
+      <h2>Yield curves by asset class</h2>
+      <span class="sh-sub">Customer yield (live UST + category spread)</span>
+    </div>
+    <div id="yc-grid" class="yc-grid"></div>
+  </div>
+</main>
+
+<footer>
+  <div id="disclaimer">Loading…</div>
+  <div style="margin-top:6px">Data sources: FHLB Office of Finance · TreasuryDirect · ICE BofA OAS via FRED · Federal Reserve H.15 CMT. For per-CUSIP municipal data see <a href="https://emma.msrb.org" target="_blank">MSRB EMMA</a>.</div>
+</footer>
+
+<script>
+const API = 'http://localhost:3001';
+let DATA = { products: [], offerings: [], curve: null };
+const CHARTS = {};
+const TENOR_YRS = { '1mo':1/12,'3mo':0.25,'6mo':0.5,'1yr':1,'2yr':2,'3yr':3,'5yr':5,'7yr':7,'10yr':10,'20yr':20,'30yr':30 };
+
+function fmtPct(x, dp=2)  { return Number.isFinite(x) ? x.toFixed(dp)+'%' : '—'; }
+function fmtBps(x)        { return Number.isFinite(x) ? `${x>=0?'+':''}${x} bps` : '—'; }
+function fmtUSD(x)        { if (!Number.isFinite(x)) return '—'; return x>=1e9?`$${(x/1e9).toFixed(2)}B`:x>=1e6?`$${(x/1e6).toFixed(1)}MM`:`$${x.toLocaleString()}`; }
+
+async function load() {
+  try {
+    const [invRes, mcRes] = await Promise.all([
+      fetch(API + '/api/public/inventory'),
+      fetch(API + '/api/public/market-color'),
+    ]);
+    DATA = await invRes.json();
+    const mc = await mcRes.json();
+    document.getElementById('updated').textContent = `Live · inventory ${new Date(DATA.updatedAt).toLocaleTimeString()} · color ${new Date(mc.updatedAt).toLocaleDateString()}`;
+    document.getElementById('disclaimer').textContent = DATA.disclaimer || '';
+    renderMarketColor(mc);
+    render();
+  } catch (e) {
+    document.getElementById('updated').textContent = 'Backend unavailable';
+    document.querySelector('main').insertAdjacentHTML('afterbegin', '<div class="section" style="border-color:var(--red);color:var(--red)">Cannot reach backend at '+API+'. Start the server (node server.js).</div>');
+  }
+}
+
+function renderMarketColor(mc) {
+  if (!mc) return;
+  const syn = mc.synthesis || {};
+  const blurbs = (syn && !syn.parseError) ? (syn.assetBlurbs || {}) : {};
+  const cbSyn   = (syn && !syn.parseError) ? (syn.centralBanks || {}) : {};
+  const xbColor = (syn && !syn.parseError) ? (syn.crossBorderColor || '') : '';
+  const noteFallback = syn?.parseError ? '<div style="color:var(--amber);font-size:11px;margin-bottom:10px">Live data current; AI commentary unavailable this cycle.</div>' : '';
+
+  // Market color cards
+  const grid = document.getElementById('mc-grid');
+  document.getElementById('mc-sub').textContent = `Refreshed ${new Date(mc.updatedAt).toLocaleString()} · all numbers from FRED / ECB SDW · commentary auto-synthesized`;
+  grid.innerHTML = noteFallback + (mc.assets || []).map(a => {
+    const s = a.snap;
+    // Spreads getting wider (positive bps change) = bonds getting CHEAPER → green;
+    // Spreads tighter (negative) = bonds richer → red. Match cross-border colors.
+    const arrow = (n) => n == null ? '<span class="mc-stat fl">—</span>' : `<span class="mc-stat ${n>0?'dn':n<0?'up':'fl'}">${n>=0?'+':''}${n}bp</span>`;
+    const valueChip = (lbl, cls) => lbl ? `<span class="chip ${cls}" style="margin-left:6px">${lbl}</span>` : '';
+    const head = s
+      ? `${s.currentBps}bp OAS ${valueChip(s.valueLabel, s.valueCls)}`
+      : '<span class="muted">narrative</span>';
+    const numerics = s ? `
+      <div class="mc-row">
+        <span class="mc-stat">vs 30d avg <b>${s.avg30Bps}bp</b> · ${arrow(s.vsAvg30Bps)}</span>
+        <span class="mc-stat">last week ${arrow(s.chg1wBps)}</span>
+        <span class="mc-stat">last month ${arrow(s.chg1mBps)}</span>
+        <span class="mc-stat">90d avg <b>${s.avg90Bps}bp</b></span>
+      </div>
+      <div class="muted" style="margin-bottom:8px">30d range ${s.rangeMin30Bps}–${s.rangeMax30Bps}bp · positive change = wider spreads (bonds got cheaper)</div>` : '';
+    const blurb = blurbs[a.id] || '<span class="muted">No commentary available.</span>';
+    return `
+    <div class="mc-card">
+      <div class="mc-head"><div class="mc-name">${a.name}</div><div class="mc-snap">${head}</div></div>
+      ${numerics}
+      <div class="mc-blurb">${blurb}</div>
+    </div>`;
+  }).join('');
+
+  // Central bank cards
+  const cbGrid = document.getElementById('cb-grid');
+  const policy = mc.policyRates || {};
+  const cbConfigs = [
+    { id:'fed', label:'Federal Reserve',  rate: policy.fed?.current,  rateLabel:'Fed funds (DFF)', date: policy.fed?.date },
+    { id:'ecb', label:'European Central Bank', rate: policy.ecb?.current, rateLabel:'Deposit facility', date: policy.ecb?.date },
+    { id:'boe', label:'Bank of England',  rate: policy.boe?.current,  rateLabel:'SONIA',           date: policy.boe?.date },
+  ];
+  cbGrid.innerHTML = cbConfigs.map(cb => {
+    const s = cbSyn[cb.id] || {};
+    return `
+    <div class="cb-card">
+      <div class="cb-head">
+        <div class="cb-name">${cb.label}</div>
+        <div class="cb-rate">${cb.rate != null ? cb.rate.toFixed(2)+'%' : '—'} <span style="color:var(--text3);font-size:10px;font-weight:400">${cb.rateLabel}</span></div>
+      </div>
+      <div class="cb-line"><span class="cb-label">Stance</span><br>${s.stance || '<span class="muted">—</span>'}</div>
+      <div class="cb-line"><span class="cb-label">Curve implies</span><br>${s.implied || '<span class="muted">—</span>'}</div>
+      <div class="cb-line"><span class="cb-label">Watch</span><br>${s.watch || '<span class="muted">—</span>'}</div>
+    </div>`;
+  }).join('');
+
+  // Forwards strip
+  const fwds = mc.ust?.impliedForwards || {};
+  document.getElementById('fwd-strip').innerHTML = `
+    <span class="fl" style="margin-right:8px">UST curve implies (forward rates)</span>
+    ${['fwd 1y in 1y','fwd 1y in 2y','fwd 2y in 3y','fwd 5y in 5y'].map(k =>
+      `<span><span class="fl">${k}</span> <span class="fv">${fwds[k] != null ? fwds[k].toFixed(2)+'%' : '—'}</span></span>`).join('')}
+    <span class="fl" style="margin-left:auto">${fwds.method || ''}</span>`;
+
+  // Cross-border table
+  const xb = mc.crossBorder || [];
+  const ust10 = mc.ust?.curve?.['10yr']?.yield;
+  document.getElementById('cb-table').innerHTML = `
+    <thead><tr>
+      <th>Region</th><th class="right">Foreign 10y</th><th class="right">US 10y</th>
+      <th class="right">Gross pickup</th><th class="right">Hedge cost (approx)</th>
+      <th class="right">Net hedged pickup</th><th>Source</th>
+    </tr></thead>
+    <tbody>${xb.map(c => `
+      <tr>
+        <td><b>${c.region}</b></td>
+        <td class="right mono">${c.foreignYield != null ? c.foreignYield.toFixed(2)+'%' : '—'}</td>
+        <td class="right mono">${ust10 != null ? ust10.toFixed(2)+'%' : '—'}</td>
+        <td class="right mono" style="color:${c.grossPickup>0?'var(--green)':'var(--red)'}">${c.grossPickup != null ? (c.grossPickup>=0?'+':'')+c.grossPickup.toFixed(2)+'%' : '—'}</td>
+        <td class="right mono">${c.hedgeCostPct != null ? (c.hedgeCostPct>=0?'+':'')+c.hedgeCostPct.toFixed(2)+'%' : '<span class="muted">n/a</span>'}</td>
+        <td class="right mono" style="color:${c.netHedgedPickup==null?'var(--text3)':c.netHedgedPickup>0?'var(--green)':'var(--red)'}">${c.netHedgedPickup != null ? (c.netHedgedPickup>=0?'+':'')+c.netHedgedPickup.toFixed(2)+'%' : '<span class="muted">unhedged only</span>'}</td>
+        <td class="muted" style="font-size:11px">${c.foreignSource}</td>
+      </tr>`).join('')}</tbody>`;
+
+  // Overnight color (new top section)
+  const overnight = (syn && !syn.parseError) ? (syn.overnightColor || '') : '';
+  const ovBlurb = document.getElementById('ov-blurb');
+  if (ovBlurb) ovBlurb.innerHTML = overnight || '<span class="muted">Overnight commentary unavailable this cycle (live data still current below).</span>';
+  const ust = mc.ust?.curve || {};
+  const ecb = mc.ecbCurve || {};
+  const fmtDelta = (bps) => bps == null ? '<span class="muted">—</span>' :
+    `<span style="color:${bps > 0 ? 'var(--green)' : bps < 0 ? 'var(--red)' : 'var(--text3)'}">${bps>=0?'+':''}${bps}bp</span>`;
+  const tenorBps = (entry) => Number.isFinite(entry?.chg1d) ? Math.round(entry.chg1d * 100) : null;
+  const ovStrip = document.getElementById('ov-strip');
+  if (ovStrip) {
+    const ustParts = ['2yr','5yr','10yr','30yr'].map(t => `<span><span class="fl">UST ${t}</span> <span class="fv">${ust[t]?.yield?.toFixed(2)||'—'}%</span> ${fmtDelta(tenorBps(ust[t]))}</span>`).join('');
+    const ecbParts = ['2yr','10yr'].map(t => `<span><span class="fl">EZ ${t}</span> <span class="fv">${ecb[t]?.yield?.toFixed(2)||'—'}%</span> ${fmtDelta(tenorBps(ecb[t]))}</span>`).join('');
+    ovStrip.innerHTML = `<span class="fl" style="margin-right:8px">Overnight session moves</span>${ustParts}${ecbParts}<span class="fl" style="margin-left:auto">vs ${ust['10yr']?.priorDate || ''}</span>`;
+  }
+  const ovSub = document.getElementById('ov-sub');
+  if (ovSub) ovSub.textContent = `Refreshed ${new Date(mc.updatedAt).toLocaleString()} · UST close from FRED · Eurozone close from ECB SDW`;
+
+  // Economic outlook
+  const eo = (syn && !syn.parseError) ? (syn.economicOutlook || '') : '';
+  const eoBlurb = document.getElementById('eo-blurb');
+  if (eoBlurb) eoBlurb.innerHTML = eo || '<span class="muted">Outlook unavailable this cycle.</span>';
+  const eoStrip = document.getElementById('eo-strip');
+  if (eoStrip) {
+    const fed = mc.policyRates?.fed?.current;
+    const fwds = mc.ust?.impliedForwards || {};
+    eoStrip.innerHTML = `
+      <span><span class="fl">Fed funds</span> <span class="fv">${fed != null ? fed.toFixed(2)+'%' : '—'}</span></span>
+      <span><span class="fl">Fwd 1y in 1y</span> <span class="fv">${fwds['fwd 1y in 1y'] != null ? fwds['fwd 1y in 1y'].toFixed(2)+'%' : '—'}</span></span>
+      <span><span class="fl">Fwd 1y in 2y</span> <span class="fv">${fwds['fwd 1y in 2y'] != null ? fwds['fwd 1y in 2y'].toFixed(2)+'%' : '—'}</span></span>
+      <span><span class="fl">10y UST</span> <span class="fv">${ust['10yr']?.yield?.toFixed(2)||'—'}%</span></span>
+      <span><span class="fl">2s10s</span> <span class="fv">${mc.ust?.spread2s10s != null ? (mc.ust.spread2s10s*100>=0?'+':'')+(mc.ust.spread2s10s*100).toFixed(0)+'bp' : '—'}</span></span>`;
+  }
+  // Risk-sentiment strip (oil, gold, VIX, breakevens) — supports the outlook narrative
+  const risk = mc.risk || {};
+  const eoRisk = document.getElementById('eo-risk');
+  if (eoRisk) {
+    const riskCell = (key, fmt) => {
+      const r = risk[key]; if (!r) return '';
+      const chg = r.chg1d;
+      const chgStr = chg == null ? '' : `<span style="color:${chg>0?'var(--green)':chg<0?'var(--red)':'var(--text3)'};font-size:11px;margin-left:4px">${chg>=0?'+':''}${fmt(chg)}</span>`;
+      return `<span><span class="fl">${r.label}</span> <span class="fv">${r.unit}${fmt(r.current)}</span>${chgStr}</span>`;
+    };
+    const f2 = v => Number(v).toFixed(2);
+    eoRisk.innerHTML = [
+      riskCell('brent', f2),
+      riskCell('wti', f2),
+      riskCell('vix', f2),
+      riskCell('breakeven10', f2),
+      riskCell('breakeven5', f2),
+    ].filter(Boolean).join('') + `<span class="fl" style="margin-left:auto">supporting risk indicators (1-day Δ)</span>`;
+  }
+  // Headlines list — what news Claude was actually shown
+  const newsList = mc.marketNews || [];
+  const eoNews = document.getElementById('eo-news');
+  if (eoNews) {
+    if (!newsList.length) {
+      eoNews.innerHTML = '<span class="muted">No recent headlines loaded.</span>';
+    } else {
+      eoNews.innerHTML = newsList.slice(0, 12).map(h => {
+        const date = h.date ? new Date(h.date).toLocaleDateString() : '';
+        return `<div style="padding:6px 9px;background:var(--bg3);border-radius:6px"><div class="muted" style="font-size:10px">${h.source}${date?' · '+date:''}</div><div style="color:var(--text)">${h.title.replace(/&apos;/g,"'").replace(/&#x2018;/g,'‘').replace(/&#x2019;/g,'’').replace(/&amp;/g,'&').replace(/&quot;/g,'"')}</div></div>`;
+      }).join('');
+    }
+  }
+
+  // Cross-border narrative slot — overnight color now sits at the top instead, clear it
+  const cbColorEl = document.getElementById('cb-color');
+  if (cbColorEl) cbColorEl.innerHTML = '';
+}
+
+function getFilters() {
+  return {
+    cls:    document.getElementById('f-class').value,
+    minY:   parseFloat(document.getElementById('f-min').value),
+    maxY:   parseFloat(document.getElementById('f-max').value),
+    minYld: parseFloat(document.getElementById('f-yield').value),
+    struct: document.getElementById('f-struct').value,
+  };
+}
+function resetFilters() {
+  ['f-min','f-max','f-yield'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-class').value = 'all';
+  document.getElementById('f-struct').value = 'all';
+  render();
+}
+['f-class','f-min','f-max','f-yield','f-struct'].forEach(id => {
+  document.addEventListener('input', e => { if (e.target.id === id) render(); });
+  document.addEventListener('change', e => { if (e.target.id === id) render(); });
+});
+
+function passesFilter(o, f, kind) {
+  // kind: 'offering' | 'rung'
+  if (f.cls !== 'all') {
+    if (kind === 'offering') {
+      const cat = inferCatFromOffering(o);
+      if (cat !== f.cls) return false;
+    } else if (o.cat !== f.cls) return false;
+  }
+  const yrs = kind === 'offering' ? o.tenorYrs : TENOR_YRS[o.label];
+  if (Number.isFinite(f.minY) && (yrs == null || yrs < f.minY)) return false;
+  if (Number.isFinite(f.maxY) && (yrs == null || yrs > f.maxY)) return false;
+  const y = kind === 'offering' ? o.customerYield : o.customerYield;
+  if (Number.isFinite(f.minYld) && (y == null || y < f.minYld)) return false;
+  if (kind === 'offering' && f.struct !== 'all') {
+    if (f.struct === 'bullet'   && o.callable) return false;
+    if (f.struct === 'callable' && !o.callable) return false;
+  }
+  return true;
+}
+function inferCatFromOffering(o) {
+  if (o.issuer === 'US Treasury') return 'treasury';
+  if (o.issuer === 'FHLB' || (o.type||'').startsWith('Agency')) return 'gse';
+  if ((o.type||'').includes('IG') || (o.type||'').includes('HY') || (o.type||'').includes('Corp')) return 'corp';
+  if ((o.type||'').includes('Muni')) return 'muni';
+  return 'other';
+}
+
+function render() {
+  const f = getFilters();
+  const offs  = (DATA.offerings || []).filter(o => passesFilter(o, f, 'offering'));
+  const products = (DATA.products || []).map(p => ({
+    ...p,
+    maturityLadder: (p.maturityLadder || []).filter(r => passesFilter({...r, cat: p.cat}, f, 'rung')),
+  })).filter(p => p.maturityLadder.length > 0);
+
+  renderHighlights(offs, products);
+  renderOfferings(offs);
+  renderIndicative(products);
+  renderYieldCurves(products);
+}
+
+function renderHighlights(offs, products) {
+  const allRungs = products.flatMap(p => p.maturityLadder.map(r => ({...r, name:p.name, cat:p.cat})));
+  const yields = allRungs.map(r => r.customerYield).filter(Number.isFinite);
+  const best = allRungs.filter(r => Number.isFinite(r.customerYield)).sort((a,b)=>b.customerYield-a.customerYield)[0];
+  const cheap = allRungs.filter(r => r.vsAvg30Bps != null).sort((a,b) => b.vsAvg30Bps - a.vsAvg30Bps)[0];
+  const upcoming = offs.filter(o => o.upcoming).length;
+  const settling = offs.filter(o => !o.upcoming).length;
+  const html = [
+    { l:'Offerings showing',     v:`${offs.length}`,                                    s:`${settling} settling today · ${upcoming} upcoming auctions` },
+    { l:'Highest indicative yld', v:best ? fmtPct(best.customerYield) : '—',             s:best ? `${best.name} · ${best.label}` : '' },
+    { l:'Best value vs 30d avg',  v:cheap ? `${cheap.valueLabel||'—'} ${cheap.vsAvg30Bps!=null?(cheap.vsAvg30Bps>=0?'+':'')+cheap.vsAvg30Bps+'bp':''}` : '—', s:cheap ? `${cheap.name} · ${cheap.label}` : 'No live OAS coverage' },
+    { l:'Yields range',           v:yields.length ? `${Math.min(...yields).toFixed(2)}–${Math.max(...yields).toFixed(2)}%` : '—', s:`${allRungs.length} tenor rungs` },
+  ].map(h => `<div class="hl-card"><div class="hl-label">${h.l}</div><div class="hl-val">${h.v}</div><div class="hl-sub">${h.s}</div></div>`).join('');
+  document.getElementById('hl-grid').innerHTML = html;
+}
+
+function renderOfferings(offs) {
+  document.getElementById('off-sub').textContent = `${offs.length} live · sources: ${(DATA.sources||[]).join(', ')}`;
+  if (offs.length === 0) {
+    document.getElementById('off-table').innerHTML = '<tbody><tr><td style="text-align:center;padding:1.5rem;color:var(--text3)">No offerings match your filters.</td></tr></tbody>';
+    return;
+  }
+  // Sort: settling today first, then by spread descending (best yield), then upcoming
+  offs.sort((a,b) => {
+    if (a.upcoming !== b.upcoming) return a.upcoming ? 1 : -1;
+    return (b.spreadBps ?? -999) - (a.spreadBps ?? -999);
+  });
+  document.getElementById('off-table').innerHTML = `
+    <thead><tr>
+      <th>CUSIP / issuer</th><th>Type</th><th>Tenor / structure</th><th class="right">Coupon</th>
+      <th class="right">Customer yield</th><th class="right">Spread vs UST</th><th class="right">Size</th><th>Status</th>
+    </tr></thead>
+    <tbody>${offs.map(o => {
+      const tenor = o.tenorYrs != null ? (o.tenorYrs<2?o.tenorYrs.toFixed(2):o.tenorYrs.toFixed(1))+'y' : '—';
+      const struct = o.callStructure ? `<span style="color:var(--gold)">${o.callStructure}</span>` : (o.callable ? 'callable' : 'bullet');
+      const status = o.upcoming
+        ? `<span class="chip cb">Upcoming · ${o.auctionDate||''}</span>`
+        : `<span class="chip cg">Settling today</span>`;
+      const callTip = o.callable && o.callSchedule?.length
+        ? ` title="First call ${o.callSchedule[0].nextCall||'?'} · ${o.callSchedule[0].frequency||''}"`
+        : '';
+      return `
+      <tr>
+        <td><div class="mono" style="font-size:12px">${o.cusip}</div><div class="muted">${o.issuer} ${o.series||''}</div></td>
+        <td${callTip}><span class="chip ${o.callable?'ca':'cn'}">${o.type}</span></td>
+        <td><span class="mono">${tenor}</span> · ${struct}</td>
+        <td class="right mono">${o.couponLabel||'—'}</td>
+        <td class="right mono" style="color:var(--accent);font-weight:500">${o.customerYieldLabel||'—'}</td>
+        <td class="right mono">${o.spreadLabel||'—'}<div class="muted" style="font-size:10px">${o.ustBenchmark||''}</div></td>
+        <td class="right mono">${o.sizeLabel||'—'}</td>
+        <td>${status}</td>
+      </tr>`;
+    }).join('')}</tbody>`;
+}
+
+function renderIndicative(products) {
+  if (products.length === 0) {
+    document.getElementById('ind-table').innerHTML = '<tbody><tr><td style="text-align:center;padding:1.5rem;color:var(--text3)">No categories match your filters.</td></tr></tbody>';
+    return;
+  }
+  document.getElementById('ind-table').innerHTML = `
+    <thead><tr>
+      <th>Class</th><th>Tenor</th><th class="right">Customer yield</th><th class="right">Spread vs UST</th>
+      <th>Value (vs 30d avg)</th><th>Source</th>
+    </tr></thead>
+    <tbody>${products.map(p => p.maturityLadder.map((r,i) => `
+      <tr>
+        <td>${i===0 ? `<div style="font-weight:500">${p.name}</div><div class="muted">${p.sub}</div>` : '<span class="muted">↳</span>'}</td>
+        <td class="mono">${r.label}</td>
+        <td class="right mono" style="color:var(--accent);font-weight:500">${r.customerYieldLabel||'—'}</td>
+        <td class="right mono">${r.spreadLabel||'—'}</td>
+        <td>${r.valueLabel ? `<span class="chip ${r.valueCls}" title="${r.spreadSource||''}${r.vsAvg30Label?' · '+r.vsAvg30Label:''}">${r.valueLabel}${r.vsAvg30Bps!=null?` · ${r.vsAvg30Bps>=0?'+':''}${r.vsAvg30Bps}bp vs 30d`:''}</span>` : '<span class="muted">—</span>'}</td>
+        <td class="muted" style="font-size:11px">${r.spreadLive ? r.spreadSource||'live' : 'modeled'}</td>
+      </tr>`).join('')).join('')}</tbody>`;
+}
+
+function renderYieldCurves(products) {
+  const grid = document.getElementById('yc-grid');
+  Object.values(CHARTS).forEach(c => c.destroy());
+  for (const k of Object.keys(CHARTS)) delete CHARTS[k];
+  const eligible = products.filter(p => (p.maturityLadder||[]).length >= 2);
+  if (eligible.length === 0) {
+    grid.innerHTML = '<div class="muted" style="padding:.5rem">No multi-tenor products in current filter.</div>';
+    return;
+  }
+  grid.innerHTML = eligible.map(p => `
+    <div class="yc-card">
+      <div class="yc-title">${p.name}</div>
+      <div class="yc-sub">${p.sub}</div>
+      <div class="yc-canvas-wrap"><canvas id="cyc-${p.id}"></canvas></div>
+    </div>`).join('');
+  eligible.forEach(p => {
+    const ctx = document.getElementById(`cyc-${p.id}`);
+    if (!ctx) return;
+    CHARTS[p.id] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: p.maturityLadder.map(m => m.label),
+        datasets: [{
+          data: p.maturityLadder.map(m => m.customerYield),
+          borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.10)',
+          tension: 0.3, fill: true, pointRadius: 3, pointBackgroundColor: '#2563eb', borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.parsed.y?.toFixed(2)}%` } } },
+        scales: {
+          x: { ticks: { color: '#4a5170', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.04)' } },
+          y: { ticks: { color: '#4a5170', font: { size: 10 }, callback: v => v.toFixed(2)+'%' }, grid: { color: 'rgba(0,0,0,0.04)' } },
+        },
+      },
+    });
+  });
+}
+
+load();
+setInterval(load, 5 * 60 * 1000);  // refresh every 5 min
+</script>
+</body>
+</html>

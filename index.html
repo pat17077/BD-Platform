@@ -106,6 +106,11 @@ nav { display:flex;gap:1px; }
 .ca { background:var(--adim);color:var(--amber); }
 .cr { background:var(--rdim);color:var(--red); }
 .cb { background:var(--bdim);color:var(--blue); }
+.cn { background:var(--bg3);color:var(--text2); }
+.muted { color:var(--text3);font-size:11px; }
+.px-input { width:74px;font-family:'IBM Plex Mono',monospace;font-size:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;padding:3px 6px;color:var(--text);outline:none; }
+.px-input:focus { border-color:var(--gold);background:var(--bg4); }
+.px-input::-webkit-outer-spin-button,.px-input::-webkit-inner-spin-button { -webkit-appearance:none;margin:0; }
 
 /* ── Markup bar ── */
 .mk-cell { display:flex;align-items:center;gap:6px; }
@@ -313,12 +318,21 @@ nav { display:flex;gap:1px; }
     <div class="page" id="page-nim2">
       <div class="panel">
         <div class="panel-title">
-          Bloomberg NIM2 — new issue monitor
-          <span class="live-dot" style="font-size:12px;text-transform:none;letter-spacing:0;color:var(--green)">Live (simulated)</span>
+          New-issue monitor — live agency settlements
+          <span class="live-dot" style="font-size:12px;text-transform:none;letter-spacing:0;color:var(--green)" id="nim2-status">Loading…</span>
         </div>
-        <p style="font-size:12px;color:var(--text3);margin-bottom:1rem">Production: wire Bloomberg B-PIPE SAPI feed. New prints auto-load to TRACE queue.</p>
-        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr auto;gap:8px;padding:6px 0;border-bottom:1px solid var(--border2)">
-          <div class="feed-head">Issuer / CUSIP</div><div class="feed-head">Type</div><div class="feed-head">Coupon</div><div class="feed-head">Maturity</div><div class="feed-head">Size</div><div class="feed-head">Spread</div><div></div>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:1rem">
+          Source: <a href="https://www.fhlb-of.com/ofweb_userWeb/pageBuilder/bond-data-files-74" target="_blank" style="color:var(--blue)">FHLB Office of Finance</a> daily settlement files (real CUSIPs, sizes, coupons, call schedules). FNMA / Freddie / MSRB EMMA pluggable next.
+        </p>
+        <div style="display:grid;grid-template-columns:1.5fr 1.1fr 0.8fr 1.1fr 0.9fr 0.9fr 0.9fr auto;gap:8px;padding:6px 0;border-bottom:1px solid var(--border2)">
+          <div class="feed-head">CUSIP / series</div>
+          <div class="feed-head">Type</div>
+          <div class="feed-head">Coupon</div>
+          <div class="feed-head">Tenor / structure</div>
+          <div class="feed-head">Size</div>
+          <div class="feed-head">UST bench</div>
+          <div class="feed-head">Spread</div>
+          <div></div>
         </div>
         <div id="nim2-log"></div>
       </div>
@@ -427,6 +441,90 @@ function sortValue(v) {
 
 function chipCls(v) { return v==='A'?'cg':v==='B'?'ca':v==='C'?'cr':'cb'; }
 
+// ─── Client-side YTM solver (mirrors server-side solveYield) ─────────────────
+// Per-rung offer prices entered by the user. Key = `${productId}|${label}`.
+const OFFER_PRICES = {};
+
+function pvBond(rate, face, cpnPct, settleDate, endDate, redeemPer100) {
+  const yrs = (new Date(endDate) - new Date(settleDate)) / (365.25 * 86400000);
+  if (yrs <= 0) return null;
+  const periods = Math.max(1, Math.round(yrs * 2));
+  const r = rate / 2;
+  const cpn = (cpnPct / 100) * face / 2;
+  const redeem = face * (redeemPer100 / 100);
+  let pv = redeem / Math.pow(1 + r, periods);
+  for (let t = 1; t <= periods; t++) pv += cpn / Math.pow(1 + r, t);
+  return pv;
+}
+
+function solveYTM(price, face, cpnPct, settleDate, endDate, redeemPer100 = 100) {
+  if (!Number.isFinite(price) || !Number.isFinite(cpnPct)) return null;
+  const priceDollars = price * (face / 100);
+  const yrs = (new Date(endDate) - new Date(settleDate)) / (365.25 * 86400000);
+  if (yrs <= 0) return null;
+  let lo = -0.5, hi = 0.5;
+  let pvLo = pvBond(lo, face, cpnPct, settleDate, endDate, redeemPer100);
+  let pvHi = pvBond(hi, face, cpnPct, settleDate, endDate, redeemPer100);
+  if (pvLo == null || pvHi == null) return null;
+  // Expand if root not bracketed
+  let tries = 0;
+  while ((pvLo - priceDollars) * (pvHi - priceDollars) > 0 && tries++ < 6) {
+    lo -= 0.5; hi += 0.5;
+    pvLo = pvBond(lo, face, cpnPct, settleDate, endDate, redeemPer100);
+    pvHi = pvBond(hi, face, cpnPct, settleDate, endDate, redeemPer100);
+    if (pvLo == null || pvHi == null) return null;
+  }
+  if ((pvLo - priceDollars) * (pvHi - priceDollars) > 0) return null;
+  for (let i = 0; i < 100; i++) {
+    const mid = (lo + hi) / 2;
+    const pvMid = pvBond(mid, face, cpnPct, settleDate, endDate, redeemPer100);
+    if (Math.abs(pvMid - priceDollars) < 1e-4) return +(mid * 100).toFixed(4);
+    if ((pvMid - priceDollars) * (pvLo - priceDollars) < 0) { hi = mid; }
+    else { lo = mid; pvLo = pvMid; }
+  }
+  return +((lo + hi) / 2 * 100).toFixed(4);
+}
+
+function rungKey(pid, label) { return `${pid}|${label}`; }
+
+// Recompute one rung's offer YTM from its current price input, then update its DOM cells.
+function updateRungYTM(pid, label, productCat) {
+  const key = rungKey(pid, label);
+  const p = PRODUCTS.find(x => x.id === pid);
+  const r = p?.maturityLadder?.find(x => x.label === label);
+  if (!r) return;
+  const priceEl = document.getElementById(`px-${key}`);
+  const ytmEl   = document.getElementById(`ytm-${key}`);
+  const sprdEl  = document.getElementById(`sprd-${key}`);
+  const mkEl    = document.getElementById(`mk-${key}`);
+  if (!priceEl) return;
+  const priceVal = parseFloat(priceEl.value);
+  const price = Number.isFinite(priceVal) ? priceVal : 100;
+  OFFER_PRICES[key] = price;
+  const ytm = solveYTM(price, 100, r.coupon, r.settleDate, r.maturityDate, 100);
+  const ust = r.ustYield;
+  const ytmStr = ytm != null ? `${ytm.toFixed(2)}%` : '—';
+  const sprdBps = (ytm != null && ust != null) ? Math.round((ytm - ust) * 100) : null;
+  const sprdStr = sprdBps != null ? `${sprdBps >= 0 ? '+' : ''}${sprdBps} bps` : '—';
+  // Markup vs fair-value model yield: positive = customer paying ABOVE fair value
+  const fairY = r.customerYield;
+  const dur = Math.max(1, r.tenorYrs || 1);
+  const mkBps = (ytm != null && fairY != null) ? Math.round((fairY - ytm) * 100) : null;
+  const mkDol = (mkBps != null) ? Math.round(mkBps * dur) : null;  // approx $ per $100 face for sizing intuition
+  if (ytmEl)  ytmEl.textContent = ytmStr;
+  if (sprdEl) sprdEl.textContent = sprdStr;
+  if (mkEl) {
+    if (mkBps == null) { mkEl.innerHTML = '<span class="muted">—</span>'; }
+    else if (Math.abs(mkBps) < 2) {
+      mkEl.innerHTML = `<span class="chip cn" title="At fair value">FV · ${mkBps>=0?'+':''}${mkBps}bp</span>`;
+    } else if (mkBps > 0) {
+      mkEl.innerHTML = `<span class="chip cg" title="Customer is buying ABOVE fair value — desk earns this spread">+${mkBps}bp · ~$${mkDol}</span>`;
+    } else {
+      mkEl.innerHTML = `<span class="chip cr" title="Customer is buying BELOW fair value — desk is giving up this much">${mkBps}bp · ~$${mkDol}</span>`;
+    }
+  }
+}
+
 const YC_CHARTS = {};
 
 function yieldRangeLabel(ladder) {
@@ -435,6 +533,15 @@ function yieldRangeLabel(ladder) {
   if (ys.length === 1) return `${ys[0].toFixed(2)}%`;
   const lo = Math.min(...ys), hi = Math.max(...ys);
   return `${lo.toFixed(2)}–${hi.toFixed(2)}%`;
+}
+
+function spreadRangeLabel(ladder) {
+  const ss = (ladder || []).map(m => m.spreadBps).filter(v => v != null);
+  if (ss.length === 0) return '—';
+  if (ss.length === 1) return `${ss[0] >= 0 ? '+' : ''}${ss[0]} bps`;
+  const lo = Math.min(...ss), hi = Math.max(...ss);
+  const fmt = v => `${v >= 0 ? '+' : ''}${v}`;
+  return `${fmt(lo)} → ${fmt(hi)} bps`;
 }
 
 function renderYieldCurves(items) {
@@ -483,6 +590,8 @@ function showPage(id, btn) {
   document.getElementById('page-'+id).classList.add('active');
   btn.classList.add('active');
   if (id==='outlook-int') loadOutlookInt();
+  if (id==='trace') loadTrace();
+  if (id==='nim2') loadNewIssues();
 }
 
 // ─── Sidebar filters ──────────────────────────────────────────────────────────
@@ -536,22 +645,24 @@ function renderInventory() {
 
   const noProductsMsg = document.getElementById('no-products-message');
   if (items.length === 0) {
-    document.getElementById('inv-table').innerHTML='<tbody><tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text3)">No products available.</td></tr></tbody>';
+    document.getElementById('inv-table').innerHTML='<tbody><tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text3)">No products available.</td></tr></tbody>';
     noProductsMsg.style.display = 'block';
   } else {
 
     noProductsMsg.style.display = 'none';
     document.getElementById('inv-table').innerHTML=`
       <thead><tr>
-        <th>Product / maturity</th><th>Coupon</th><th class="sorted">Markup typical</th><th>Street range</th>
-        <th>Customer yield</th><th>Dealer $/bond</th><th>Liquidity note</th>
+        <th>Product / maturity</th><th class="sorted">Markup typical</th><th>Street range</th>
+        <th>Offer price</th><th>YTM @ offer</th><th>Spread vs UST</th><th>Value (vs 30d)</th><th>Markup vs FV</th><th>Liquidity note</th>
       </tr></thead>
       <tbody>${items.map(p=>{
         const ladder = Array.isArray(p.maturityLadder) ? p.maturityLadder : [];
+        const aggValue = p.valueLabel
+          ? `<span class="chip ${p.valueCls}" title="Aggregate of per-tenor value labels (Cheap/Fair/Rich) vs trailing 30-day average">${p.valueLabel}</span>`
+          : '<span style="color:var(--text3);font-size:11px">—</span>';
         return `
         <tr class="product-row">
           <td><div style="font-weight:500">${p.name}</div><div style="font-size:11px;color:var(--text3)">${p.sub}</div></td>
-          <td class="mono" style="color:var(--text2)">${ladder.length ? ladder[0].couponLabel : '—'}</td>
           <td>
             <div class="mk-cell">
               <span class="mono" style="color:var(--amber)">~${p.streetTypical} bps</span>
@@ -559,21 +670,37 @@ function renderInventory() {
             </div>
           </td>
           <td class="mono" style="color:var(--text2)">${p.streetLow}–${p.streetHigh} bps</td>
+          <td class="mono" style="color:var(--text3);font-size:11px">par</td>
           <td class="mono" style="color:var(--gold2)">${yieldRangeLabel(ladder)}</td>
-          <td>${formatDealerValue(p)}</td>
+          <td class="mono" style="color:var(--text2)">${spreadRangeLabel(ladder)}</td>
+          <td>${aggValue}</td>
+          <td><span style="color:var(--text3);font-size:11px">—</span></td>
           <td style="font-size:12px;color:var(--text3)">${p.note}</td>
         </tr>
-        ${ladder.map((item, i) => `
+        ${ladder.map((item, i) => {
+          const key = `${p.id}|${item.label}`;
+          const px = OFFER_PRICES[key] ?? 100;
+          // Initial YTM at par = the model fair-value yield (close enough; still recompute on first render)
+          const initYtm = solveYTM(px, 100, item.coupon, item.settleDate, item.maturityDate, 100);
+          const initYtmLabel = initYtm != null ? `${initYtm.toFixed(2)}%` : '—';
+          const initSprdBps = (initYtm != null && item.ustYield != null) ? Math.round((initYtm - item.ustYield) * 100) : null;
+          const initSprdLabel = initSprdBps != null ? `${initSprdBps>=0?'+':''}${initSprdBps} bps` : '—';
+          const onChg = `updateRungYTM('${p.id}','${item.label}','${p.cat}')`;
+          return `
           <tr class="ladder-row${i === ladder.length - 1 ? ' last-rung' : ''}">
-            <td>${item.label}</td>
-            <td class="mono">${item.couponLabel}</td>
+            <td>${item.label}<div style="font-size:10px;color:var(--text3);font-weight:400">cpn ${item.couponLabel} · mat ${item.maturityDate||'—'}</div></td>
             <td></td>
             <td></td>
-            <td class="mono" style="color:var(--gold2)">${item.customerYieldLabel}</td>
-            <td class="mono">${item.dealerValueLabel}</td>
-            <td></td>
-          </tr>`).join('')}
+            <td><input type="number" step="0.05" class="px-input" id="px-${key}" value="${px.toFixed(2)}" oninput="${onChg}" title="Offer price per $100 face. Default par."></td>
+            <td class="mono" id="ytm-${key}" style="color:var(--gold2);font-weight:500">${initYtmLabel}</td>
+            <td class="mono" id="sprd-${key}" title="${item.spreadSource||''}${item.spreadAvg30Bps!=null?` · 30d avg ${item.spreadAvg30Bps}bps`:''}">${initSprdLabel}</td>
+            <td>${item.valueLabel ? `<span class="chip ${item.valueCls}" title="${item.vsAvg30Label||''} (vs the past 30 trading days)">${item.valueLabel}${item.vsAvg30Bps!=null?` · ${item.vsAvg30Bps>=0?'+':''}${item.vsAvg30Bps}bp vs 30d avg`:''}</span>` : '<span style="color:var(--text3);font-size:11px">—</span>'}</td>
+            <td id="mk-${key}"><span class="chip cn" title="At fair value">FV · 0bp</span></td>
+            <td><span style="font-size:11px;color:var(--text3)" title="Fair value: ${item.customerYieldLabel} (UST ${item.ustYield?.toFixed(2)||'—'}% + ${item.spreadSource||''})">FV ${item.customerYieldLabel}</span></td>
+          </tr>`;}).join('')}
       `;}).join('')}</tbody>`;
+    // Recompute every rung once on render so price-input edits in flight survive
+    items.forEach(p => (p.maturityLadder || []).forEach(r => updateRungYTM(p.id, r.label, p.cat)));
   }
   renderYieldCurves(items);
 
@@ -617,38 +744,76 @@ function runSim() {
 
 function renderTrace() {
   if (TRACE_PRINTS.length === 0) {
-    document.getElementById('trace-log').innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">No TRACE prints available</div>';
+    document.getElementById('trace-log').innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">Loading TRACE prints…</div>';
   } else {
     document.getElementById('trace-log').innerHTML=TRACE_PRINTS.map(t=>`
       <div class="feed-row">
         <div><div class="mono" style="font-size:12px">${t.cusip}</div><div style="font-size:11px;color:var(--text3)">${t.issuer}</div></div>
         <div style="font-size:12px;color:var(--text2)">${t.type}</div>
         <div class="mono">$${(t.par/1000).toFixed(0)}K</div>
-        <div class="mono">${t.price.toFixed(3)}</div>
-        <div class="mono" style="color:var(--blue)">${t.yield.toFixed(2)}%</div>
-        <div style="font-size:12px;color:var(--text3)">${t.time}</div>
+        <div class="mono">${(t.price ?? 0).toFixed(3)}</div>
+        <div class="mono" style="color:var(--blue)">${(t.yield ?? 0).toFixed(2)}%</div>
+        <div style="font-size:12px;color:var(--text3)" title="${t.source||''}">${t.time}</div>
         <div><button class="refresh-pill" style="font-size:11px;padding:3px 8px">Load</button></div>
       </div>`).join('');
   }
 }
 
+async function loadTrace() {
+  try {
+    const data = await apiFetch('/api/internal/trace', true);
+    if (Array.isArray(data.items)) {
+      TRACE_PRINTS.splice(0, TRACE_PRINTS.length, ...data.items);
+      renderTrace();
+    }
+  } catch (e) {
+    console.error('Failed to load TRACE:', e);
+    document.getElementById('trace-log').innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">Unable to load TRACE prints. Check backend.</div>';
+  }
+}
+
 function renderNIM2() {
+  const grid = 'display:grid;grid-template-columns:1.5fr 1.1fr 0.8fr 1.1fr 0.9fr 0.9fr 0.9fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)';
   if (NIM2.length === 0) {
-    document.getElementById('nim2-log').innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">No NIM2 feed available</div>';
+    document.getElementById('nim2-log').innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">Loading new-issue feed…</div>';
   } else {
-    document.getElementById('nim2-log').innerHTML=NIM2.map(n=>`
-      <div class="feed-row">
-        <div><div style="font-weight:500">${n.issuer}</div><div class="mono" style="font-size:11px;color:var(--text3)">${n.cusip}</div></div>
-        <div style="font-size:12px;color:var(--text2)">${n.type}</div>
-        <div class="mono">${n.coupon.toFixed(2)}%</div>
-        <div class="mono" style="font-size:12px">${n.maturity}</div>
-        <div class="mono">${n.size}</div>
-        <div style="font-size:12px;color:var(--blue)">${n.spread}</div>
+    document.getElementById('nim2-log').innerHTML=NIM2.map(n=>{
+      const tenorTxt = n.tenorYrs != null ? `${n.tenorYrs.toFixed(n.tenorYrs < 2 ? 2 : 0)}y` : '—';
+      const structTxt = n.callStructure ? `· <span style="color:var(--gold)">${n.callStructure}</span>` : '· bullet';
+      const spreadColor = n.spreadBps == null ? 'var(--text3)' : (n.spreadBps > 50 ? 'var(--green)' : n.spreadBps > 20 ? 'var(--gold2)' : 'var(--text2)');
+      const callTip = n.callable && n.callSchedule?.length
+        ? ` title="First call ${n.callSchedule[0].nextCall||'?'} · freq ${n.callSchedule[0].frequency||'?'}"`
+        : '';
+      return `
+      <div style="${grid}">
+        <div><div class="mono" style="font-size:12px">${n.cusip||'—'}</div><div style="font-size:11px;color:var(--text3)">${n.issuer} ${n.series||''}</div></div>
+        <div style="font-size:12px;color:${n.callable?'var(--gold2)':'var(--text2)'}"${callTip}>${n.type||'—'}</div>
+        <div class="mono">${n.couponLabel||'—'}</div>
+        <div style="font-size:12px"><span class="mono">${tenorTxt}</span> <span style="color:var(--text3);font-size:11px">${structTxt}</span></div>
+        <div class="mono" style="font-size:12px">${n.sizeLabel||'—'}</div>
+        <div class="mono" style="font-size:11px;color:var(--text3)">${n.ustBenchmark||'—'}</div>
+        <div class="mono" style="color:${spreadColor}">${n.spreadLabel||'—'}</div>
         <div style="display:flex;align-items:center;gap:5px">
-          ${n.isNew?'<span class="chip ca" style="font-size:10px">New</span>':''}
+          <span class="chip cg" style="font-size:10px">Today</span>
           <button class="refresh-pill" style="font-size:11px;padding:3px 8px">Queue</button>
         </div>
-      </div>`).join('');
+      </div>`;}).join('');
+  }
+}
+
+async function loadNewIssues() {
+  try {
+    const data = await apiFetch('/api/internal/new-issues', true);
+    if (Array.isArray(data.items)) {
+      NIM2.splice(0, NIM2.length, ...data.items);
+      renderNIM2();
+      const status = document.getElementById('nim2-status');
+      if (status) status.textContent = `Live · ${data.items.length} settling today · src ${(data.sources||[]).join(', ')}`;
+    }
+  } catch (e) {
+    console.error('Failed to load new issues:', e);
+    const status = document.getElementById('nim2-status');
+    if (status) { status.textContent = 'Backend unavailable'; status.style.color = 'var(--red)'; }
   }
 }
 
@@ -703,7 +868,7 @@ async function loadProducts() {
     runSim();
   } catch(e) {
     console.error('Failed to load products:', e);
-    document.getElementById('inv-table').innerHTML = '<tbody><tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text3)">Unable to load products. Check backend or internal API token.</td></tr></tbody>';
+    document.getElementById('inv-table').innerHTML = '<tbody><tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text3)">Unable to load products. Check backend or internal API token.</td></tr></tbody>';
     document.getElementById('no-products-message').textContent = 'Unable to load products. Check backend or internal API token.';
     document.getElementById('no-products-message').style.display = 'block';
   }
@@ -744,6 +909,8 @@ function initApp() {
   startClock();
   loadCurve();
   loadProducts();
+  loadTrace();
+  loadNewIssues();
   renderInventory();
   runSim();
   renderTrace();
