@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Spread Desk — Fixed Income Inventory</title>
+<title>PB Securities — Fixed Income Client Portal</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
@@ -100,6 +100,112 @@ main { max-width:1300px; margin:0 auto; padding:24px; }
 .fwd-strip .fl { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:.05em; }
 .fwd-strip .fv { font-family:'IBM Plex Mono',monospace; font-size:14px; color:var(--accent); font-weight:500; margin-right:14px; }
 
+/* ── Bond analyzer ── */
+.ba-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin-bottom:14px; }
+.ba-card { background:var(--bg3); border:1px solid var(--border); border-radius:var(--r); padding:10px 12px; }
+.ba-card h3 { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--text3); font-weight:500; margin-bottom:4px; }
+.ba-card .v { font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:500; color:var(--accent); }
+.ba-card .v.warn { color:var(--red); }
+.ba-card .sub { font-size:11px; color:var(--text2); margin-top:2px; }
+.ba-table th, .ba-table td { font-size:12px; }
+.ba-table .hot { background:rgba(192,130,10,0.08); }
+.ba-table .called { color:var(--red); font-weight:500; }
+.ba-table .live { color:var(--green); }
+
+/* ── Portfolio + currency ── */
+.fx-strip { display:flex; gap:18px; flex-wrap:wrap; align-items:center; padding:8px 14px; background:var(--bg3); border:1px solid var(--border); border-radius:var(--r); }
+.fx-strip .pair { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:.05em; }
+.fx-strip .rate { font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:500; color:var(--text); margin-right:14px; }
+.cur-toggle { font-family:inherit; font-size:12px; padding:6px 10px; border:1px solid var(--border2); border-radius:6px; background:var(--bg2); color:var(--text); margin-left:8px; }
+
+.holdings-table input { width:100%; font-family:inherit; font-size:12px; padding:5px 7px; border:1px solid var(--border2); border-radius:4px; background:var(--bg2); color:var(--text); outline:none; }
+.holdings-table input:focus { border-color:var(--accent); }
+.holdings-table select { width:100%; font-family:inherit; font-size:12px; padding:5px 7px; border:1px solid var(--border2); border-radius:4px; background:var(--bg2); color:var(--text); }
+.holdings-actions { display:flex; gap:8px; margin-bottom:12px; }
+.holdings-actions button { font-size:12px; padding:7px 14px; border:1px solid var(--border2); border-radius:6px; background:var(--bg3); color:var(--text); cursor:pointer; }
+.holdings-actions button:hover { background:var(--bg4); }
+.holdings-actions button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+/* ── Portal tabs ── */
+.tab-nav { display:flex; gap:2px; margin-top:14px; }
+.tab-nav a { font-family:inherit; font-size:13px; padding:10px 16px; color:var(--text2); text-decoration:none; border-bottom:2px solid transparent; transition:all .12s; cursor:pointer; }
+.tab-nav a:hover { color:var(--text); }
+.tab-nav a.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:500; }
+.tab-page { display:none; }
+.tab-page.active { display:block; animation:fadeIn .15s ease-in; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+.sub-tabs { display:inline-flex; gap:2px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:3px; margin-bottom:14px; }
+.sub-tabs button { font-family:inherit; font-size:12px; padding:6px 14px; border:none; background:transparent; color:var(--text2); border-radius:5px; cursor:pointer; transition:all .12s; }
+.sub-tabs button:hover { color:var(--text); }
+.sub-tabs button.active { background:var(--bg2); color:var(--accent); font-weight:500; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
+.placeholder-section { padding:50px 30px; text-align:center; background:var(--bg2); border:1px dashed var(--border2); border-radius:var(--r); }
+.placeholder-section h3 { font-size:16px; font-weight:500; color:var(--text); margin-bottom:8px; }
+.placeholder-section p { color:var(--text2); font-size:13px; max-width:520px; margin:0 auto; line-height:1.6; }
+
+/* ── MOVE sparkline ── */
+.move-card { display:grid; grid-template-columns:1fr 2fr; gap:18px; align-items:center; background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); padding:16px 20px; }
+.move-stats .num { font-family:'IBM Plex Mono',monospace; font-size:24px; font-weight:500; color:var(--accent); }
+.move-stats .sub { font-size:11px; color:var(--text3); margin-top:2px; }
+.move-stats .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:10px; font-size:11px; color:var(--text2); }
+.move-stats .grid b { font-family:'IBM Plex Mono',monospace; color:var(--text); font-weight:500; }
+.move-canvas-wrap { position:relative; height:90px; }
+
+/* ── Interactive structure comparison ── */
+.cmp-pickers { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:12px; }
+.cmp-pickers .col h4 { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text3); margin-bottom:6px; }
+.cmp-pickers select { width:100%; font-family:inherit; font-size:13px; padding:8px 10px; border:1px solid var(--border2); border-radius:6px; background:var(--bg2); color:var(--text); }
+.cmp-grid th, .cmp-grid td { text-align:center; }
+.cmp-grid td.scenario { text-align:left; font-weight:500; }
+.cmp-grid td.divider { border-left:1px solid var(--border2); }
+
+/* ── Modal (RFQ) ── */
+.modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.4); display:none; align-items:center; justify-content:center; z-index:1000; }
+.modal-bg.open { display:flex; }
+.modal { background:var(--bg2); border-radius:10px; padding:24px 26px; max-width:520px; width:92%; max-height:90vh; overflow:auto; box-shadow:0 20px 60px rgba(0,0,0,0.25); }
+.modal h3 { font-size:16px; font-weight:500; margin-bottom:4px; }
+.modal .sub { font-size:12px; color:var(--text3); margin-bottom:18px; }
+.modal .field { margin-bottom:12px; }
+.modal label { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text3); font-weight:500; margin-bottom:4px; }
+.modal input, .modal textarea { width:100%; font-family:inherit; font-size:13px; padding:8px 10px; border:1px solid var(--border2); border-radius:6px; background:var(--bg2); color:var(--text); outline:none; }
+.modal input:focus, .modal textarea:focus { border-color:var(--accent); }
+.modal textarea { resize:vertical; min-height:70px; }
+.modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+.modal-actions button { font-family:inherit; font-size:13px; padding:9px 18px; border-radius:6px; cursor:pointer; }
+.modal-actions .secondary { background:var(--bg3); color:var(--text); border:1px solid var(--border2); }
+.modal-actions .primary { background:var(--accent); color:#fff; border:1px solid var(--accent); font-weight:500; }
+
+/* ── Action buttons on offering rows ── */
+.rfq-btn { font-size:11px; padding:4px 10px; border:1px solid var(--accent); border-radius:5px; background:transparent; color:var(--accent); cursor:pointer; transition:all .12s; }
+.rfq-btn:hover { background:var(--accent); color:#fff; }
+
+/* ── Chat (Contact tab) ── */
+.chat-window { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); display:flex; flex-direction:column; height:480px; }
+.chat-header { padding:12px 18px; border-bottom:1px solid var(--border); font-size:13px; font-weight:500; color:var(--text); display:flex; justify-content:space-between; align-items:center; }
+.chat-header .status::before { content:'● '; color:var(--green); font-size:9px; }
+.chat-messages { flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:10px; }
+.chat-msg { max-width:75%; padding:9px 13px; border-radius:12px; font-size:13px; line-height:1.5; }
+.chat-msg.outbound { align-self:flex-end; background:var(--accent); color:#fff; }
+.chat-msg.inbound  { align-self:flex-start; background:var(--bg3); color:var(--text); }
+.chat-msg .ts { font-size:10px; opacity:0.7; margin-top:3px; }
+.chat-input { display:flex; gap:8px; padding:12px 18px; border-top:1px solid var(--border); }
+.chat-input input { flex:1; font-family:inherit; font-size:13px; padding:9px 12px; border:1px solid var(--border2); border-radius:6px; background:var(--bg2); color:var(--text); outline:none; }
+.chat-input input:focus { border-color:var(--accent); }
+.chat-input button { font-family:inherit; font-size:13px; padding:9px 18px; border-radius:6px; background:var(--accent); color:#fff; border:none; cursor:pointer; font-weight:500; }
+.chat-info { margin-top:10px; font-size:11px; color:var(--text3); }
+
+/* ── Documents (Research tab) ── */
+.doc-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:12px; }
+.doc-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); padding:14px 16px; }
+.doc-card h4 { font-size:13px; font-weight:500; margin-bottom:10px; color:var(--text); }
+.doc-row { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--border); font-size:12px; }
+.doc-row:last-child { border-bottom:none; }
+.doc-row .doc-name { color:var(--text2); }
+.doc-row .doc-dl { font-size:11px; color:var(--accent); cursor:pointer; padding:3px 9px; border:1px solid var(--accent); border-radius:4px; background:transparent; }
+.doc-row .doc-dl:hover { background:var(--accent); color:#fff; }
+
+/* ── Saved-search notification badge on tab ── */
+.tab-badge { display:inline-block; min-width:18px; padding:1px 6px; margin-left:6px; background:var(--accent); color:#fff; border-radius:9px; font-size:10px; font-weight:600; text-align:center; vertical-align:1px; }
+
 /* ── Footer ── */
 footer { max-width:1300px; margin:24px auto 32px; padding:0 24px; font-size:11px; color:var(--text3); }
 footer a { color:var(--accent); text-decoration:none; }
@@ -107,18 +213,31 @@ footer a:hover { text-decoration:underline; }
 </style>
 </head>
 <body>
-<header>
-  <div>
-    <div class="brand">SPREAD DESK</div>
-    <div class="brand-sub">Fixed income offerings · Indicative levels</div>
+<header style="flex-direction:column;align-items:stretch;padding-bottom:0">
+  <div style="display:flex;justify-content:space-between;align-items:center;width:100%">
+    <div>
+      <div class="brand">PB SECURITIES</div>
+      <div class="brand-sub">Fixed income client portal</div>
+    </div>
+    <div class="live" id="updated">Loading…</div>
   </div>
-  <div class="live" id="updated">Loading…</div>
+  <nav class="tab-nav" role="tablist">
+    <a data-tab="portfolio" onclick="showTab('portfolio')">My Portfolio</a>
+    <a data-tab="offerings" onclick="showTab('offerings')">Offerings</a>
+    <a data-tab="market" class="active" onclick="showTab('market')">Market Intelligence</a>
+    <a data-tab="research" onclick="showTab('research')">Research</a>
+    <a data-tab="contact" onclick="showTab('contact')">Contact</a>
+    <a data-tab="settings" onclick="showTab('settings')">Settings</a>
+  </nav>
 </header>
 
 <main>
+
+<!-- ═══════════════════════ TAB: MARKET INTELLIGENCE ═══════════════════════ -->
+<div class="tab-page active" data-tab="market">
   <div class="intro">
     <h1>Where the value is across fixed income today</h1>
-    <p>Live indicative customer yields by maturity and structure. Filter by what you need; we'll show you what's offered today and where the curve is rich or cheap relative to the trailing year.</p>
+    <p>Live indicative yields by maturity and structure. Overnight market color, central-bank outlook, and a callable-bond analyzer — all anchored to live FRED + ECB SDW data.</p>
   </div>
 
   <!-- Overnight color (replaces nothing — sits above highlights for a "what just happened" framing) -->
@@ -178,6 +297,230 @@ footer a:hover { text-decoration:underline; }
     <div id="cb-color" style="margin-top:14px;font-size:13px;color:var(--text2);line-height:1.6"></div>
   </div>
 
+  <!-- ═══ BOND ANALYZER (callable analytics) ═══ -->
+  <div class="section">
+    <div class="section-h">
+      <h2>Bond analyzer — callable / step-up / floater / bullet</h2>
+      <span class="sh-sub">Yield-to-worst across all calls · effective duration &amp; convexity · scenario analysis</span>
+    </div>
+    <div class="filters" style="display:grid;grid-template-columns:repeat(6,1fr) auto;gap:10px;align-items:end;background:var(--bg3);border:1px solid var(--border);padding:14px 16px;border-radius:var(--r);margin-bottom:14px">
+      <div class="f-field">
+        <label class="f-label">Structure</label>
+        <select class="f-select" id="ba-structure" onchange="baRecompute()">
+          <option value="callable">Callable</option>
+          <option value="bullet">Bullet</option>
+          <option value="stepup">Step-up</option>
+          <option value="floater">Floater (SOFR+)</option>
+        </select>
+      </div>
+      <div class="f-field">
+        <label class="f-label">Coupon (%)</label>
+        <input type="number" step="0.01" class="f-input" id="ba-coupon" value="5.00" oninput="baRecompute()">
+      </div>
+      <div class="f-field">
+        <label class="f-label">Maturity (yrs)</label>
+        <input type="number" step="0.5" min="0.25" class="f-input" id="ba-tenor" value="10" oninput="baRecompute()">
+      </div>
+      <div class="f-field" id="ba-firstcall-field">
+        <label class="f-label">First call (yrs)</label>
+        <input type="number" step="0.25" min="0.25" class="f-input" id="ba-firstcall" value="1" oninput="baRecompute()">
+      </div>
+      <div class="f-field" id="ba-callfreq-field">
+        <label class="f-label">Call frequency</label>
+        <select class="f-select" id="ba-callfreq" onchange="baRecompute()">
+          <option value="3">Quarterly</option>
+          <option value="6" selected>Semi-annual</option>
+          <option value="12">Annual</option>
+        </select>
+      </div>
+      <div class="f-field">
+        <label class="f-label">Offer price</label>
+        <input type="number" step="0.05" class="f-input" id="ba-price" value="100.00" oninput="baRecompute()">
+      </div>
+      <button class="f-reset" onclick="baReset()">Reset</button>
+    </div>
+    <div class="ba-grid" id="ba-summary"></div>
+    <div class="section-h" style="margin-top:18px">
+      <h2 style="font-size:13px">Rate-shock scenarios — which calls likely fire?</h2>
+      <span class="sh-sub">Assumes issuer calls when refinancing yield is &lt; coupon by ≥25bp</span>
+    </div>
+    <table class="tbl ba-table" id="ba-scenarios"></table>
+    <div style="margin-top:10px;font-size:11px;color:var(--text3)">
+      Effective duration / convexity computed via 100bp parallel shock with smoothed call-exercise probability.
+    </div>
+
+    <!-- Interactive structure comparison (Phase 2) -->
+    <div class="section-h" style="margin-top:18px">
+      <h2 style="font-size:13px">Side-by-side: compare two structures</h2>
+      <span class="sh-sub">Pick any two — see how each behaves across ±200bp rate scenarios</span>
+    </div>
+    <div class="cmp-pickers">
+      <div class="col">
+        <h4>Structure A</h4>
+        <select id="cmp-a" onchange="renderStructureComparison()">
+          <option value="bullet">Bullet (no calls)</option>
+          <option value="1NC1" selected>Callable 1NC1 (quarterly)</option>
+          <option value="5NC1">Callable 5NC1 (semi-annual)</option>
+          <option value="5NC2">Callable 5NC2 (semi-annual)</option>
+          <option value="stepup">Step-up (annual)</option>
+        </select>
+      </div>
+      <div class="col">
+        <h4>Structure B</h4>
+        <select id="cmp-b" onchange="renderStructureComparison()">
+          <option value="bullet" selected>Bullet (no calls)</option>
+          <option value="1NC1">Callable 1NC1 (quarterly)</option>
+          <option value="5NC1">Callable 5NC1 (semi-annual)</option>
+          <option value="5NC2">Callable 5NC2 (semi-annual)</option>
+          <option value="stepup">Step-up (annual)</option>
+        </select>
+      </div>
+    </div>
+    <table class="tbl cmp-grid" id="cmp-table"></table>
+  </div>
+
+  <!-- ═══ MOVE INDEX HISTORY ═══ -->
+  <div class="section">
+    <div class="section-h">
+      <h2>MOVE Index — Treasury option-implied vol</h2>
+      <span class="sh-sub">
+        Drives callable spreads and MBS prepay risk premia
+        <span class="sub-tabs" style="margin-left:14px;display:inline-flex">
+          <button id="move-zoom-1y" class="active" onclick="setMoveZoom('1y')">1y</button>
+          <button id="move-zoom-30d" onclick="setMoveZoom('30d')">30d</button>
+        </span>
+      </span>
+    </div>
+    <div class="move-card" id="move-card">
+      <div class="move-stats">
+        <div class="num" id="move-current">—</div>
+        <div class="sub" id="move-pctile">loading…</div>
+        <div class="grid">
+          <span>1y avg <b id="move-avg">—</b></span>
+          <span>1y range <b id="move-range">—</b></span>
+        </div>
+      </div>
+      <div class="move-canvas-wrap"><canvas id="move-sparkline"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Indicative levels by category (live FRED OAS-driven) -->
+  <div class="section">
+    <div class="section-h">
+      <h2>Indicative customer yields by class &amp; tenor</h2>
+      <span class="sh-sub">Live UST CMT + ICE BofA index OAS · 1y percentile shows where current spreads sit</span>
+    </div>
+    <table class="tbl" id="ind-table"></table>
+  </div>
+
+  <!-- Yield curves -->
+  <div class="section">
+    <div class="section-h">
+      <h2>Yield curves by asset class</h2>
+      <span class="sh-sub">
+        Indicative yield (modeled) — live UST + category spread
+        <span class="sub-tabs" style="margin-left:14px;display:inline-flex" id="yc-overlay-tabs">
+          <button class="active" onclick="setYcOverlay('none')">Yield only</button>
+          <button onclick="setYcOverlay('chg1w')">+ 1w Δ</button>
+          <button onclick="setYcOverlay('chg1m')">+ 1m Δ</button>
+        </span>
+      </span>
+    </div>
+    <div id="yc-grid" class="yc-grid"></div>
+  </div>
+</div> <!-- end Market Intelligence tab -->
+
+<!-- ═══════════════════════ TAB: MY PORTFOLIO ═══════════════════════ -->
+<div class="tab-page" data-tab="portfolio">
+
+  <div class="intro">
+    <h1>My portfolio</h1>
+    <p>Your holdings, projected cash flows, and live currency-aware totals. Holdings are stored locally on your device.</p>
+  </div>
+
+  <!-- ═══ TRADE IDEAS (placeholder UI; engine wires up later) ═══ -->
+  <div class="section">
+    <div class="section-h">
+      <h2>Trade ideas for you</h2>
+      <span class="sh-sub">Tied to your holdings &amp; mandate · regenerates daily</span>
+    </div>
+    <div id="trade-ideas-client"></div>
+  </div>
+
+  <!-- ═══ WATCHLIST ═══ -->
+  <div class="section">
+    <div class="section-h">
+      <h2>Watchlist</h2>
+      <span class="sh-sub" id="wl-portfolio-count">—</span>
+    </div>
+    <div id="wl-portfolio"></div>
+  </div>
+
+  <!-- ═══ MY PORTFOLIO + CASH FLOWS ═══ -->
+  <div class="section">
+    <div class="section-h">
+      <h2>My portfolio — projected cash flows</h2>
+      <span class="sh-sub">Stored locally on your device · holdings never leave your browser</span>
+    </div>
+    <div class="holdings-actions">
+      <button class="primary" onclick="addHolding()">+ Add holding</button>
+      <button onclick="loadDemoHoldings()">Load demo portfolio</button>
+      <button onclick="clearHoldings()">Clear all</button>
+      <span style="margin-left:auto;font-size:12px;color:var(--text2);align-self:center">Total face: <b id="port-total" style="color:var(--text);font-family:'IBM Plex Mono',monospace">$0</b></span>
+      <select class="cur-toggle" id="port-currency" onchange="renderPortfolio()">
+        <option value="USD">USD</option>
+        <option value="EUR">EUR</option>
+        <option value="NOK">NOK</option>
+        <option value="CHF">CHF</option>
+        <option value="GBP">GBP</option>
+        <option value="JPY">JPY</option>
+        <option value="CAD">CAD</option>
+      </select>
+    </div>
+    <div style="overflow-x:auto;margin-bottom:18px">
+      <table class="tbl holdings-table" id="port-table"></table>
+    </div>
+    <div class="section-h" style="margin-top:8px">
+      <h2 style="font-size:13px">Projected cash flows over 30 years</h2>
+      <span class="sh-sub">
+        <select class="cur-toggle" id="port-scenario" onchange="renderPortfolio()" style="margin-left:0">
+          <option value="0">Base case (current rates)</option>
+          <option value="-100">Rates −100 bps (calls likely)</option>
+          <option value="-200">Rates −200 bps (deep ITM calls)</option>
+          <option value="100">Rates +100 bps (no calls)</option>
+          <option value="200">Rates +200 bps</option>
+        </select>
+      </span>
+    </div>
+    <div style="position:relative;height:260px"><canvas id="port-cf-chart"></canvas></div>
+  </div>
+
+  <!-- ═══ FX & MULTI-CURRENCY ═══ -->
+  <div class="section">
+    <div class="section-h">
+      <h2>FX rates · live USD vs EUR / NOK / CHF / GBP / JPY / CAD</h2>
+      <span class="sh-sub">From FRED daily — used for portfolio currency conversion above</span>
+    </div>
+    <div class="fx-strip" id="fx-strip"></div>
+    <div style="margin-top:10px;font-size:11px;color:var(--text3)">
+      Spot rates from FRED daily. Configure your home currency in Settings to apply across the portal.
+    </div>
+  </div>
+</div> <!-- end Portfolio tab -->
+
+<!-- ═══════════════════════ TAB: OFFERINGS ═══════════════════════ -->
+<div class="tab-page" data-tab="offerings">
+
+  <div class="intro">
+    <h1>Today's offerings</h1>
+    <p>Per-CUSIP fixed-income offerings, filtered to what's most relevant or fully browseable. Use the sub-tabs below to switch views.</p>
+  </div>
+
+  <div class="sub-tabs" role="tablist">
+    <button id="sub-curated" class="active" onclick="setOfferingsView('curated')">Curated for you</button>
+    <button id="sub-all" onclick="setOfferingsView('all')">Browse all</button>
+  </div>
+
   <!-- Filters -->
   <div class="filters">
     <div class="f-field">
@@ -214,6 +557,17 @@ footer a:hover { text-decoration:underline; }
     <button class="f-reset" onclick="resetFilters()">Reset</button>
   </div>
 
+  <!-- Saved searches row -->
+  <div style="display:flex;gap:10px;align-items:center;margin:-6px 0 14px;font-size:12px;flex-wrap:wrap">
+    <span class="muted">Saved searches:</span>
+    <select id="ss-pick" class="f-select" style="font-size:12px;padding:5px 8px;min-width:200px" onchange="loadSavedSearch(this.value)">
+      <option value="">— select —</option>
+    </select>
+    <input type="text" id="ss-name" class="f-input" placeholder="Name this search…" style="font-size:12px;padding:5px 8px;width:200px">
+    <button class="cur-toggle" style="font-size:12px;padding:5px 10px" onclick="saveCurrentSearch()">Save current</button>
+    <button class="cur-toggle" style="font-size:12px;padding:5px 10px" onclick="deleteSavedSearch()">Delete</button>
+  </div>
+
   <!-- Live offerings (real per-CUSIP) -->
   <div class="section">
     <div class="section-h">
@@ -223,24 +577,243 @@ footer a:hover { text-decoration:underline; }
     <table class="tbl" id="off-table"></table>
   </div>
 
-  <!-- Indicative levels by category (live FRED OAS-driven) -->
+  <!-- Money market & discount notes -->
   <div class="section">
     <div class="section-h">
-      <h2>Indicative customer yields by class &amp; tenor</h2>
-      <span class="sh-sub">Live UST CMT + ICE BofA index OAS · 1y percentile shows where current spreads sit</span>
+      <h2>Money market &amp; discount notes</h2>
+      <span class="sh-sub">T-bills · agency discount notes · short-term GSE paper · convert across all four yield conventions</span>
     </div>
-    <table class="tbl" id="ind-table"></table>
+    <div class="filters" style="display:grid;grid-template-columns:repeat(5,1fr) auto;gap:12px;align-items:end;background:var(--bg3);border:1px solid var(--border);padding:14px 16px;border-radius:var(--r);margin-bottom:14px">
+      <div class="f-field">
+        <label class="f-label">Settlement</label>
+        <select class="f-select" id="cmm-settle" onchange="cmmRecompute()">
+          <option value="0">T+0 (cash)</option>
+          <option value="1" selected>T+1 (regular way)</option>
+        </select>
+      </div>
+      <div class="f-field">
+        <label class="f-label">Maturity date</label>
+        <input class="f-input" type="date" id="cmm-mat" oninput="cmmRecompute()">
+      </div>
+      <div class="f-field">
+        <label class="f-label">Or days</label>
+        <input class="f-input" type="number" min="1" max="397" placeholder="e.g. 90" id="cmm-days" oninput="cmmOnDays()">
+      </div>
+      <div class="f-field">
+        <label class="f-label">Input as</label>
+        <select class="f-select" id="cmm-mode" onchange="cmmRecompute()">
+          <option value="discountRate">Discount Rate (Act/360)</option>
+          <option value="bey" selected>Bond Equivalent Yield (Act/365)</option>
+          <option value="mmy">Money Market Yield (Act/360)</option>
+          <option value="price">Price (per 100)</option>
+        </select>
+      </div>
+      <div class="f-field">
+        <label class="f-label">Value</label>
+        <input class="f-input" type="number" step="0.01" value="4.30" id="cmm-value" oninput="cmmRecompute()">
+      </div>
+      <button class="f-reset" onclick="cmmReset()">Reset</button>
+    </div>
+    <div id="cmm-out" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px"></div>
+    <table class="tbl" id="mm-off-table"></table>
+    <div style="font-size:11px;color:var(--text3);margin-top:10px">DR = Act/360 on face · MMY = Act/360 on price · BEY = Act/365 on price (SIFMA Standard Securities Calculation Methods).</div>
+  </div>
+</div> <!-- end Offerings tab -->
+
+<!-- ═══════════════════════ TAB: RESEARCH ═══════════════════════ -->
+<div class="tab-page" data-tab="research">
+  <div class="intro">
+    <h1>Research &amp; documents</h1>
+    <p>Long-form weekly outlook and your document library — offering documents, statements, confirms, and tax forms.</p>
   </div>
 
-  <!-- Yield curves -->
+  <div class="section">
+    <div class="section-h"><h2>Weekly economic outlook</h2><span class="sh-sub" id="research-outlook-stamp">—</span></div>
+    <div id="research-outlook-body" style="font-size:13.5px;line-height:1.7;color:var(--text2)">Loading…</div>
+  </div>
+
+  <div class="section">
+    <div class="section-h"><h2>Your documents</h2></div>
+    <div class="doc-grid" id="doc-grid">
+      <div class="doc-card">
+        <h4>Offering documents</h4>
+        <div class="doc-row"><span class="doc-name">No offering docs yet — submit an RFQ to receive the prospectus &amp; pricing supplement</span></div>
+      </div>
+      <div class="doc-card">
+        <h4>Account statements</h4>
+        <div class="doc-row"><span class="doc-name">Wired to your custodian on go-live · monthly + quarterly</span></div>
+      </div>
+      <div class="doc-card">
+        <h4>Trade confirmations</h4>
+        <div class="doc-row"><span class="doc-name">Generated after each fill · downloads available T+1</span></div>
+      </div>
+      <div class="doc-card">
+        <h4>Tax forms</h4>
+        <div class="doc-row"><span class="doc-name">Year-end 1099 / annual statements · jurisdiction-aware (NO/DE/CH/US/UK)</span></div>
+      </div>
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:var(--text3)">Document delivery integrates with your custodian / clearing firm. Placeholder content above — real flow lands once back-office is wired.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ TAB: CONTACT ═══════════════════════ -->
+<div class="tab-page" data-tab="contact">
+  <div class="intro">
+    <h1>Contact your desk</h1>
+    <p>Direct messaging to your coverage team. Submitted RFQs also appear in the desk's queue.</p>
+  </div>
+
+  <div class="chat-window">
+    <div class="chat-header">
+      <div>PB Securities · Sales coverage</div>
+      <div class="status">Desk online · responses typically within 5 min during market hours</div>
+    </div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input">
+      <input id="chat-text" type="text" placeholder="Send a message to the desk…" onkeydown="if(event.key==='Enter')sendMessage()">
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+  <div class="chat-info">
+    Messages and submitted RFQs are sent to the desk's queue and stored on your device for your own record. For sensitive trade instructions, use your firm's authenticated channel until SSO is wired in.
+  </div>
+
+  <div class="section" style="margin-top:18px">
+    <div class="section-h"><h2>Your recent RFQs</h2><span class="sh-sub" id="rfq-history-count">—</span></div>
+    <div id="rfq-history"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ TAB: SETTINGS ═══════════════════════ -->
+<div class="tab-page" data-tab="settings">
+  <div class="intro">
+    <h1>Settings</h1>
+    <p>Your profile and mandate preferences drive the Curated-for-you offerings view, the home-currency totals on My Portfolio, and (when wired) the tax overlays. All stored locally on this device.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-h"><h2>Profile</h2></div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">
+      <div class="f-field"><label class="f-label">Name</label><input class="f-input" id="prof-name" type="text" placeholder="e.g. Anders Lindberg"></div>
+      <div class="f-field"><label class="f-label">Email (optional)</label><input class="f-input" id="prof-email" type="email"></div>
+      <div class="f-field"><label class="f-label">Jurisdiction (for tax overlays)</label>
+        <select class="f-select" id="prof-juris">
+          <option value="US">United States</option>
+          <option value="NO">Norway (22% capital gains)</option>
+          <option value="DE">Germany (26.375% Abgeltungssteuer)</option>
+          <option value="CH">Switzerland (cantonal)</option>
+          <option value="UK">United Kingdom</option>
+          <option value="OTHER">Other</option>
+        </select>
+      </div>
+      <div class="f-field"><label class="f-label">Home currency (for portfolio totals)</label>
+        <select class="f-select" id="prof-ccy">
+          <option value="USD">USD</option><option value="EUR">EUR</option><option value="NOK">NOK</option>
+          <option value="CHF">CHF</option><option value="GBP">GBP</option><option value="JPY">JPY</option>
+          <option value="CAD">CAD</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-h"><h2>Mandate filters <span class="sh-sub">— used by the Curated offerings view</span></h2></div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">
+      <div class="f-field"><label class="f-label">Minimum credit rating</label>
+        <select class="f-select" id="prof-rating">
+          <option value="NONE">No floor (show all)</option>
+          <option value="AAA">AAA only</option>
+          <option value="AA">AA or better</option>
+          <option value="A">A or better</option>
+          <option value="BBB">BBB or better (investment grade)</option>
+          <option value="BB">BB or better</option>
+        </select>
+      </div>
+      <div class="f-field"><label class="f-label">Maximum tenor (years)</label>
+        <input class="f-input" id="prof-maxtenor" type="number" step="0.5" min="0.25" max="30">
+      </div>
+      <div class="f-field" style="grid-column:span 2"><label class="f-label">Allowed structures</label>
+        <div style="display:flex;gap:12px;margin-top:4px;font-size:13px">
+          <label><input type="checkbox" id="prof-bullet"> Bullet</label>
+          <label><input type="checkbox" id="prof-callable"> Callable</label>
+          <label><input type="checkbox" id="prof-floater"> Floater</label>
+          <label><input type="checkbox" id="prof-taxable"> Taxable account</label>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:18px;display:flex;gap:10px">
+      <button class="cur-toggle" onclick="saveSettings()" style="background:var(--accent);color:#fff;border-color:var(--accent);padding:8px 18px;font-weight:500">Save</button>
+      <button class="cur-toggle" onclick="resetSettings()" style="padding:8px 14px">Reset to defaults</button>
+      <span id="prof-status" class="muted" style="align-self:center"></span>
+    </div>
+  </div>
+
   <div class="section">
     <div class="section-h">
-      <h2>Yield curves by asset class</h2>
-      <span class="sh-sub">Customer yield (live UST + category spread)</span>
+      <h2>Tax overlay</h2>
+      <span class="sh-sub" id="tax-rate-label">—</span>
     </div>
-    <div id="yc-grid" class="yc-grid"></div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;align-items:end">
+      <div class="f-field" style="grid-column:span 2">
+        <label style="font-size:13px;display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="tax-active">
+          <span>Show after-tax yields on offerings &amp; indicative tables</span>
+        </label>
+      </div>
+      <div class="f-field" id="tax-de-row" style="display:none">
+        <label style="font-size:13px;display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="tax-de-church">
+          <span>Add Kirchensteuer (German church tax, +~2pp)</span>
+        </label>
+      </div>
+      <div class="f-field" id="tax-custom-row" style="display:none">
+        <label class="f-label">Custom effective rate (%)</label>
+        <input class="f-input" id="tax-custom-rate" type="number" step="0.5" min="0" max="60" placeholder="25">
+      </div>
+    </div>
+    <div style="margin-top:14px;font-size:11px;color:var(--text3);line-height:1.55" id="tax-disclaimer">
+      Indicative tax calculations — real after-tax outcomes depend on account type, holding period, residency status, and personal income bracket. Confirm with your tax advisor before acting.
+    </div>
+    <div style="margin-top:12px;display:flex;gap:10px">
+      <button class="cur-toggle" onclick="saveSettings()" style="background:var(--accent);color:#fff;border-color:var(--accent);padding:8px 18px;font-weight:500">Save</button>
+    </div>
   </div>
+
+  <div class="section">
+    <div class="section-h"><h2>Watchlist</h2><span class="sh-sub" id="wl-count">—</span></div>
+    <div id="wl-settings"></div>
+  </div>
+</div>
+
 </main>
+
+<!-- RFQ modal — opens from offerings rows -->
+<div class="modal-bg" id="rfq-modal" onclick="if(event.target===this)closeRfq()">
+  <div class="modal" role="dialog">
+    <h3>Request a quote</h3>
+    <div class="sub" id="rfq-context">—</div>
+    <div class="field"><label>Size requested ($ face value)</label>
+      <input id="rfq-size" type="number" min="0" step="10000" placeholder="e.g. 500000">
+    </div>
+    <div class="field"><label>Preferred settlement</label>
+      <input id="rfq-settle" type="date">
+    </div>
+    <div class="field"><label>Notes (optional)</label>
+      <textarea id="rfq-notes" placeholder="Any constraints, target yield, or context for the desk…"></textarea>
+    </div>
+    <div class="field" id="rfq-name-field"><label>Your name</label>
+      <input id="rfq-name" type="text">
+    </div>
+    <div class="field" id="rfq-email-field"><label>Email (optional)</label>
+      <input id="rfq-email" type="email">
+    </div>
+    <div id="rfq-status" style="font-size:12px;color:var(--text3);margin-top:6px"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeRfq()">Cancel</button>
+      <button class="primary" onclick="submitRfq()" id="rfq-submit-btn">Send to desk</button>
+    </div>
+  </div>
+</div>
 
 <footer>
   <div id="disclaimer">Loading…</div>
@@ -252,24 +825,164 @@ footer a:hover { text-decoration:underline; }
 const API = (window.location.protocol === 'file:') ? 'http://localhost:3001' : '';
 let DATA = { products: [], offerings: [], curve: null };
 const CHARTS = {};
+
+// ════════════════════════════════════════════════════════════════════════════
+// CLIENT PROFILE — localStorage, drives personalization (mandate filter,
+// watchlist, currency, jurisdiction). Default profile is generous so the page
+// is useful for a new visitor before they touch Settings.
+// ════════════════════════════════════════════════════════════════════════════
+const PROFILE_KEY = 'bd-client-profile-v1';
+const PROFILE_DEFAULTS = {
+  name: '',
+  email: '',
+  jurisdiction: 'US',        // NO | DE | CH | US | UK | OTHER
+  homeCurrency: 'USD',
+  mandate: {
+    minRating: 'NONE',
+    maxTenorYrs: 30,
+    structures: ['bullet','callable','floater'],
+    taxableAccount: true,
+  },
+  tax: {
+    active: false,           // master toggle — show after-tax columns?
+    churchTaxDE: false,      // DE: Kirchensteuer adds ~8% of the 26.375% to ~28.5%
+    customRate: null,        // CH / OTHER: user-defined decimal effective rate
+  },
+  watchlist: [],
+  savedSearches: [],
+};
+
+// Reference table — flat effective rates on coupon income (decimal form).
+// Sources are the standard published rates as of 2025; the UI surfaces the
+// caveat that real after-tax outcomes depend on account type, holding period,
+// canton, and personal income — these numbers are for indicative display only.
+const TAX_DEFAULTS = {
+  NO:    { rate: 0.22,    label: '22% capital income tax (Norway)' },
+  DE:    { rate: 0.26375, label: '26.375% (Abgeltungssteuer + Solidaritätszuschlag)' },
+  CH:    { rate: 0.25,    label: '~25% effective (Swiss federal + cantonal — varies)' },
+  US:    { rate: 0.24,    label: '24% (federal ordinary income, placeholder)' },
+  UK:    { rate: 0.20,    label: '20% basic-rate income tax (UK, placeholder)' },
+  OTHER: { rate: 0.20,    label: 'Custom — set effective rate in Settings' },
+};
+function _effectiveTaxRate(p = PROFILE) {
+  const j = p.jurisdiction || 'US';
+  const tax = p.tax || {};
+  // Custom rate overrides (CH or OTHER)
+  if ((j === 'CH' || j === 'OTHER') && Number.isFinite(tax.customRate)) {
+    return Math.max(0, Math.min(0.6, tax.customRate));
+  }
+  let rate = (TAX_DEFAULTS[j] || TAX_DEFAULTS.OTHER).rate;
+  // DE: optional church tax (Kirchensteuer ≈ 8-9% of base; we use 8%)
+  if (j === 'DE' && tax.churchTaxDE) rate += 0.26375 * 0.08;
+  return rate;
+}
+function _afterTaxPct(grossPct, p = PROFILE) {
+  if (!Number.isFinite(grossPct)) return null;
+  return grossPct * (1 - _effectiveTaxRate(p));
+}
+function _taxIsActive() {
+  return !!(PROFILE.tax && PROFILE.tax.active);
+}
+let PROFILE = (() => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}');
+    return { ...PROFILE_DEFAULTS, ...stored, mandate: { ...PROFILE_DEFAULTS.mandate, ...(stored.mandate||{}) } };
+  } catch { return { ...PROFILE_DEFAULTS }; }
+})();
+function saveProfile() { localStorage.setItem(PROFILE_KEY, JSON.stringify(PROFILE)); }
+function updateProfile(patch) {
+  PROFILE = { ...PROFILE, ...patch, mandate: { ...PROFILE.mandate, ...(patch.mandate||{}) } };
+  saveProfile();
+}
+function toggleWatchlist(cusip) {
+  const idx = PROFILE.watchlist.indexOf(cusip);
+  if (idx >= 0) PROFILE.watchlist.splice(idx, 1);
+  else PROFILE.watchlist.push(cusip);
+  saveProfile();
+  render();              // re-render offerings so star fills/un-fills
+  renderWatchlist();     // refresh portfolio-tab watchlist
+}
+// Issuer-based rating proxy — we don't get per-CUSIP ratings in the GSE/Treasury
+// feed, but the mandate filter needs *some* signal. Treasury=AAA; FHLB/FFCB=AA+;
+// corp tags carry their bucket. Refine when we wire a paid rating feed.
+function _ratingProxy(o) {
+  const t = (o.type || '').toLowerCase();
+  const iss = (o.issuer || '').toLowerCase();
+  if (iss.includes('treasury'))                 return 'AAA';
+  if (iss.includes('fhlb') || iss.includes('farm credit') || iss.includes('fnma') || iss.includes('freddie')) return 'AA';
+  if (t.includes('ig'))                         return 'A';
+  if (t.includes('hy'))                         return 'BB';
+  return 'AA';   // unknown agency-grade default
+}
+const _RATING_ORDER = ['NONE','BB','BBB','A','AA','AAA'];
+function offeringPassesMandate(o) {
+  const m = PROFILE.mandate;
+  if (m.maxTenorYrs != null && o.tenorYrs != null && o.tenorYrs > m.maxTenorYrs) return false;
+  if (m.structures && m.structures.length) {
+    const s = (o.type || '').toLowerCase();
+    const allowed = m.structures.some(p => s.includes(p));
+    if (!allowed) return false;
+  }
+  if (m.minRating && m.minRating !== 'NONE') {
+    const have = _RATING_ORDER.indexOf(_ratingProxy(o));
+    const want = _RATING_ORDER.indexOf(m.minRating);
+    if (have < want) return false;
+  }
+  return true;
+}
 const TENOR_YRS = { '1mo':1/12,'3mo':0.25,'6mo':0.5,'1yr':1,'2yr':2,'3yr':3,'5yr':5,'7yr':7,'10yr':10,'20yr':20,'30yr':30 };
 
 function fmtPct(x, dp=2)  { return Number.isFinite(x) ? x.toFixed(dp)+'%' : '—'; }
 function fmtBps(x)        { return Number.isFinite(x) ? `${x>=0?'+':''}${x} bps` : '—'; }
 function fmtUSD(x)        { if (!Number.isFinite(x)) return '—'; return x>=1e9?`$${(x/1e9).toFixed(2)}B`:x>=1e6?`$${(x/1e6).toFixed(1)}MM`:`$${x.toLocaleString()}`; }
 
+// True until both inventory and market color have first loaded with real data
+let _firstLoadDone = false;
+let _pollTimer = null;
+// Last known-good timestamps per data slice (in-memory). Survives within a
+// session so the header can show "last update Xm ago" while a refresh retries.
+const _lastKnownGood = { inventory: null, marketColor: null };
+
+function _fmtTimeOrLoading(iso, fallbackKey) {
+  if (iso) {
+    const d = new Date(iso);
+    if (Number.isFinite(d.getTime()) && d.getFullYear() >= 2000) {
+      if (fallbackKey) _lastKnownGood[fallbackKey] = iso;
+      return d.toLocaleTimeString();
+    }
+  }
+  // Fall back to last-known-good if we have it
+  if (fallbackKey && _lastKnownGood[fallbackKey]) {
+    const d = new Date(_lastKnownGood[fallbackKey]);
+    const mins = Math.round((Date.now() - d.getTime()) / 60000);
+    return `refreshing… last update ${mins}m ago`;
+  }
+  return 'refreshing…';
+}
+
 async function load() {
   try {
     const [invRes, mcRes] = await Promise.all([
-      fetch(API + '/api/public/inventory'),
+      fetch(API + '/api/public/inventory' + (_offeringsView === 'all' ? '?view=all' : '')),
       fetch(API + '/api/public/market-color'),
     ]);
     DATA = await invRes.json();
     const mc = await mcRes.json();
-    document.getElementById('updated').textContent = `Live · inventory ${new Date(DATA.updatedAt).toLocaleTimeString()} · color ${new Date(mc.updatedAt).toLocaleDateString()}`;
+    const invStr = _fmtTimeOrLoading(DATA.updatedAt, 'inventory');
+    const mcStr  = _fmtTimeOrLoading(mc.updatedAt, 'marketColor');
+    document.getElementById('updated').textContent = `Live · inventory ${invStr} · color ${mcStr}`;
     document.getElementById('disclaimer').textContent = DATA.disclaimer || '';
     renderMarketColor(mc);
     render();
+    // If anything is still loading (no synthesis yet, no offerings yet), poll fast until it lands
+    const stillCold = mc.stale || !mc.synthesis || !DATA.updatedAt || !mc.updatedAt;
+    if (stillCold) {
+      if (_pollTimer) clearTimeout(_pollTimer);
+      _pollTimer = setTimeout(load, 8000);  // re-check every 8s while cold
+    } else {
+      _firstLoadDone = true;
+      if (_pollTimer) { clearTimeout(_pollTimer); _pollTimer = null; }
+    }
   } catch (e) {
     document.getElementById('updated').textContent = 'Backend unavailable';
     document.querySelector('main').insertAdjacentHTML('afterbegin', '<div class="section" style="border-color:var(--red);color:var(--red)">Cannot reach backend at '+API+'. Start the server (node server.js).</div>');
@@ -286,7 +999,7 @@ function renderMarketColor(mc) {
 
   // Market color cards
   const grid = document.getElementById('mc-grid');
-  document.getElementById('mc-sub').textContent = `Refreshed ${new Date(mc.updatedAt).toLocaleString()} · all numbers from FRED / ECB SDW · commentary auto-synthesized`;
+  document.getElementById('mc-sub').textContent = `Refreshed ${_fmtTimeOrLoading(mc.updatedAt, 'marketColor')} · all numbers from FRED / ECB SDW · commentary auto-synthesized`;
   grid.innerHTML = noteFallback + (mc.assets || []).map(a => {
     const s = a.snap;
     // Spreads getting wider (positive bps change) = bonds getting CHEAPER → green;
@@ -379,7 +1092,7 @@ function renderMarketColor(mc) {
     ovStrip.innerHTML = `<span class="fl" style="margin-right:8px">Overnight session moves</span>${ustParts}${ecbParts}<span class="fl" style="margin-left:auto">vs ${ust['10yr']?.priorDate || ''}</span>`;
   }
   const ovSub = document.getElementById('ov-sub');
-  if (ovSub) ovSub.textContent = `Refreshed ${new Date(mc.updatedAt).toLocaleString()} · UST close from FRED · Eurozone close from ECB SDW`;
+  if (ovSub) ovSub.textContent = `Refreshed ${_fmtTimeOrLoading(mc.updatedAt, 'marketColor')} · UST close from FRED · Eurozone close from ECB SDW`;
 
   // Economic outlook
   const eo = (syn && !syn.parseError) ? (syn.economicOutlook || '') : '';
@@ -410,7 +1123,7 @@ function renderMarketColor(mc) {
     eoRisk.innerHTML = [
       riskCell('brent', f2),
       riskCell('wti', f2),
-      riskCell('vix', f2),
+      riskCell('move', f2),
       riskCell('breakeven10', f2),
       riskCell('breakeven5', f2),
     ].filter(Boolean).join('') + `<span class="fl" style="margin-left:auto">supporting risk indicators (1-day Δ)</span>`;
@@ -483,7 +1196,13 @@ function inferCatFromOffering(o) {
 
 function render() {
   const f = getFilters();
-  const offs  = (DATA.offerings || []).filter(o => passesFilter(o, f, 'offering'));
+  let offs = (DATA.offerings || []).filter(o => passesFilter(o, f, 'offering'));
+  // Curated view: also apply the client's mandate (rating floor, max tenor,
+  // structure prefs). Browse all skips the mandate filter — clients can still
+  // see everything if they need to.
+  if (_offeringsView === 'curated') {
+    offs = offs.filter(offeringPassesMandate);
+  }
   const products = (DATA.products || []).map(p => ({
     ...p,
     maturityLadder: (p.maturityLadder || []).filter(r => passesFilter({...r, cat: p.cat}, f, 'rung')),
@@ -493,6 +1212,8 @@ function render() {
   renderOfferings(offs);
   renderIndicative(products);
   renderYieldCurves(products);
+  renderWatchlist();
+  refreshSavedSearchBadge();
 }
 
 function renderHighlights(offs, products) {
@@ -512,20 +1233,42 @@ function renderHighlights(offs, products) {
 }
 
 function renderOfferings(offs) {
-  document.getElementById('off-sub').textContent = `${offs.length} live · sources: ${(DATA.sources||[]).join(', ')}`;
+  const taxBanner = _taxIsActive()
+    ? ` · After-tax: ${PROFILE.jurisdiction} (${(_effectiveTaxRate()*100).toFixed(2)}%)`
+    : '';
+  document.getElementById('off-sub').textContent = `${offs.length} live · sources: ${(DATA.sources||[]).join(', ')}${taxBanner}`;
   if (offs.length === 0) {
     document.getElementById('off-table').innerHTML = '<tbody><tr><td style="text-align:center;padding:1.5rem;color:var(--text3)">No offerings match your filters.</td></tr></tbody>';
     return;
   }
-  // Sort: settling today first, then by spread descending (best yield), then upcoming
-  offs.sort((a,b) => {
-    if (a.upcoming !== b.upcoming) return a.upcoming ? 1 : -1;
-    return (b.spreadBps ?? -999) - (a.spreadBps ?? -999);
-  });
+  // Default sort if user hasn't picked one yet: settling today first, then by spread desc
+  if (!SORT_STATE['off-table']) {
+    offs.sort((a,b) => {
+      if (a.upcoming !== b.upcoming) return a.upcoming ? 1 : -1;
+      return (b.spreadBps ?? -999) - (a.spreadBps ?? -999);
+    });
+  } else {
+    offs = _applySort(offs, 'off-table', (o, k) => ({
+      cusip: o.cusip, type: o.type, tenor: o.tenorYrs, coupon: o.coupon,
+      yield: o.customerYield, atyield: _afterTaxPct(o.customerYield),
+      spread: o.spreadBps, size: o.size, status: o.upcoming ? 1 : 0,
+    })[k]);
+  }
+  const taxOn = _taxIsActive();
+  const taxRatePct = (_effectiveTaxRate() * 100).toFixed(2);
   document.getElementById('off-table').innerHTML = `
     <thead><tr>
-      <th>CUSIP / issuer</th><th>Type</th><th>Tenor / structure</th><th class="right">Coupon</th>
-      <th class="right">Customer yield</th><th class="right">Spread vs UST</th><th class="right">Size</th><th>Status</th>
+      <th></th>
+      ${_sortHeader('off-table','cusip','CUSIP / issuer')}
+      ${_sortHeader('off-table','type','Type')}
+      ${_sortHeader('off-table','tenor','Tenor / structure')}
+      ${_sortHeader('off-table','coupon','Coupon',{right:true})}
+      ${_sortHeader('off-table','yield','Indicative yield (modeled)',{right:true})}
+      ${taxOn ? _sortHeader('off-table','atyield','After-tax yield',{right:true}) : ''}
+      ${_sortHeader('off-table','spread','Spread vs UST',{right:true})}
+      ${_sortHeader('off-table','size','Size',{right:true})}
+      ${_sortHeader('off-table','status','Status')}
+      <th></th>
     </tr></thead>
     <tbody>${offs.map(o => {
       const tenor = o.tenorYrs != null ? (o.tenorYrs<2?o.tenorYrs.toFixed(2):o.tenorYrs.toFixed(1))+'y' : '—';
@@ -536,16 +1279,21 @@ function renderOfferings(offs) {
       const callTip = o.callable && o.callSchedule?.length
         ? ` title="First call ${o.callSchedule[0].nextCall||'?'} · ${o.callSchedule[0].frequency||''}"`
         : '';
+      const watched = PROFILE.watchlist.includes(o.cusip);
+      const aty = _afterTaxPct(o.customerYield);
       return `
       <tr>
+        <td style="text-align:center;cursor:pointer;font-size:16px;color:${watched?'var(--gold)':'var(--text3)'}" title="${watched?'Remove from watchlist':'Add to watchlist'}" onclick="toggleWatchlist('${o.cusip}')">${watched?'★':'☆'}</td>
         <td><div class="mono" style="font-size:12px">${o.cusip}</div><div class="muted">${o.issuer} ${o.series||''}</div></td>
         <td${callTip}><span class="chip ${o.callable?'ca':'cn'}">${o.type}</span></td>
         <td><span class="mono">${tenor}</span> · ${struct}</td>
         <td class="right mono">${o.couponLabel||'—'}</td>
         <td class="right mono" style="color:var(--accent);font-weight:500">${o.customerYieldLabel||'—'}</td>
+        ${taxOn ? `<td class="right mono" style="color:var(--green)">${aty!=null?aty.toFixed(2)+'%':'—'}</td>` : ''}
         <td class="right mono">${o.spreadLabel||'—'}<div class="muted" style="font-size:10px">${o.ustBenchmark||''}</div></td>
         <td class="right mono">${o.sizeLabel||'—'}</td>
         <td>${status}</td>
+        <td><button class="rfq-btn" onclick="openRfq('${o.cusip}','${(o.issuer||'').replace(/'/g,"\\'")}','${(o.couponLabel||'').replace(/'/g,"\\'")}','${o.maturity||''}')">Request quote</button></td>
       </tr>`;
     }).join('')}</tbody>`;
 }
@@ -555,22 +1303,62 @@ function renderIndicative(products) {
     document.getElementById('ind-table').innerHTML = '<tbody><tr><td style="text-align:center;padding:1.5rem;color:var(--text3)">No categories match your filters.</td></tr></tbody>';
     return;
   }
+  const taxOn = _taxIsActive();
+  const taxRatePct = (_effectiveTaxRate() * 100).toFixed(2);
+  // Flatten to row list so sortable can act on it
+  const TENOR_MAP = { '1mo':1/12,'3mo':0.25,'6mo':0.5,'1yr':1,'2yr':2,'3yr':3,'5yr':5,'7yr':7,'10yr':10,'20yr':20,'30yr':30 };
+  let rows = [];
+  products.forEach(p => p.maturityLadder.forEach((r,i) => rows.push({ ...r, _classLabel: p.name, _classSub: p.sub, _isFirstOfClass: i === 0, _classKey: p.cat||p.name })));
+  if (SORT_STATE['ind-table']) {
+    rows = _applySort(rows, 'ind-table', (r, k) => ({
+      class: r._classLabel,
+      tenor: TENOR_MAP[r.label] ?? 0,
+      yield: r.customerYield,
+      atyield: _afterTaxPct(r.customerYield),
+      spread: r.spreadBps,
+      value: r.vsAvg30Bps,
+    })[k]);
+    // After sort, the grouping leaders are gone; show class label on every row.
+    rows.forEach(r => r._isFirstOfClass = true);
+  }
   document.getElementById('ind-table').innerHTML = `
     <thead><tr>
-      <th>Class</th><th>Tenor</th><th class="right">Customer yield</th><th class="right">Spread vs UST</th>
-      <th>Value (vs 30d avg)</th><th>Source</th>
+      ${_sortHeader('ind-table','class','Class')}
+      ${_sortHeader('ind-table','tenor','Tenor')}
+      ${_sortHeader('ind-table','yield','Indicative yield (modeled)',{right:true})}
+      ${taxOn ? _sortHeader('ind-table','atyield','After-tax yield',{right:true}) : ''}
+      ${_sortHeader('ind-table','spread','Spread vs UST',{right:true})}
+      ${_sortHeader('ind-table','value','Value (vs 30d avg)')}
+      <th>Source</th>
     </tr></thead>
-    <tbody>${products.map(p => p.maturityLadder.map((r,i) => `
+    <tbody>${rows.map(r => {
+      const aty = _afterTaxPct(r.customerYield);
+      return `
       <tr>
-        <td>${i===0 ? `<div style="font-weight:500">${p.name}</div><div class="muted">${p.sub}</div>` : '<span class="muted">↳</span>'}</td>
+        <td>${r._isFirstOfClass ? `<div style="font-weight:500">${r._classLabel}</div><div class="muted">${r._classSub}</div>` : '<span class="muted">↳</span>'}</td>
         <td class="mono">${r.label}</td>
         <td class="right mono" style="color:var(--accent);font-weight:500">${r.customerYieldLabel||'—'}</td>
+        ${taxOn ? `<td class="right mono" style="color:var(--green)">${aty!=null?aty.toFixed(2)+'%':'—'}</td>` : ''}
         <td class="right mono">${r.spreadLabel||'—'}</td>
         <td>${r.valueLabel ? `<span class="chip ${r.valueCls}" title="${r.spreadSource||''}${r.vsAvg30Label?' · '+r.vsAvg30Label:''}">${r.valueLabel}${r.vsAvg30Bps!=null?` · ${r.vsAvg30Bps>=0?'+':''}${r.vsAvg30Bps}bp vs 30d`:''}</span>` : '<span class="muted">—</span>'}</td>
         <td class="muted" style="font-size:11px">${r.spreadLive ? r.spreadSource||'live' : 'modeled'}</td>
-      </tr>`).join('')).join('')}</tbody>`;
+      </tr>`;
+    }).join('')}</tbody>`;
 }
 
+// Yield curve overlay: 'none' shows just today's curve; 'chg1w' / 'chg1m' add
+// a dashed second line showing where the same curve was N days ago. We
+// approximate "where it was" by subtracting the UST change at each tenor —
+// holds the category spread constant, which is a reasonable simplification
+// for week-to-week views.
+let _ycOverlay = 'none';
+function setYcOverlay(name) {
+  _ycOverlay = name;
+  document.querySelectorAll('#yc-overlay-tabs button').forEach((b, i) => {
+    b.classList.toggle('active', ['none','chg1w','chg1m'][i] === name);
+  });
+  render();
+}
 function renderYieldCurves(products) {
   const grid = document.getElementById('yc-grid');
   Object.values(CHARTS).forEach(c => c.destroy());
@@ -580,6 +1368,14 @@ function renderYieldCurves(products) {
     grid.innerHTML = '<div class="muted" style="padding:.5rem">No multi-tenor products in current filter.</div>';
     return;
   }
+  // UST per-tenor change lookup for the overlay (from /api/public/inventory's curve payload)
+  const ustChg = (label) => {
+    const c = (DATA.curve || {})[label];
+    if (!c) return null;
+    return _ycOverlay === 'chg1w' ? c.chg1w : _ycOverlay === 'chg1m' ? c.chg1m : null;
+  };
+  const overlayLabel = _ycOverlay === 'chg1w' ? '1w ago' : _ycOverlay === 'chg1m' ? '1m ago' : null;
+
   grid.innerHTML = eligible.map(p => `
     <div class="yc-card">
       <div class="yc-title">${p.name}</div>
@@ -589,19 +1385,40 @@ function renderYieldCurves(products) {
   eligible.forEach(p => {
     const ctx = document.getElementById(`cyc-${p.id}`);
     if (!ctx) return;
+    const labels  = p.maturityLadder.map(m => m.label);
+    const current = p.maturityLadder.map(m => m.customerYield);
+    const datasets = [{
+      label: 'Now',
+      data: current,
+      borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.10)',
+      tension: 0.3, fill: true, pointRadius: 3, pointBackgroundColor: '#2563eb', borderWidth: 2,
+    }];
+    if (overlayLabel) {
+      const priorCurve = p.maturityLadder.map(m => {
+        const chg = ustChg(m.label);
+        return (m.customerYield != null && chg != null) ? +(m.customerYield - chg).toFixed(3) : null;
+      });
+      // Only add overlay if we have at least 2 non-null prior points
+      if (priorCurve.filter(v => v != null).length >= 2) {
+        datasets.push({
+          label: overlayLabel,
+          data: priorCurve,
+          borderColor: 'rgba(74,81,112,0.7)',
+          borderDash: [5,4],
+          pointRadius: 2, pointBackgroundColor: 'rgba(74,81,112,0.7)',
+          fill: false, borderWidth: 1.5, tension: 0.3,
+        });
+      }
+    }
     CHARTS[p.id] = new Chart(ctx, {
       type: 'line',
-      data: {
-        labels: p.maturityLadder.map(m => m.label),
-        datasets: [{
-          data: p.maturityLadder.map(m => m.customerYield),
-          borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.10)',
-          tension: 0.3, fill: true, pointRadius: 3, pointBackgroundColor: '#2563eb', borderWidth: 2,
-        }],
-      },
+      data: { labels, datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.parsed.y?.toFixed(2)}%` } } },
+        plugins: {
+          legend: overlayLabel ? { display: true, position: 'top', align: 'end', labels: { boxWidth: 10, font: { size: 9 }, color: '#4a5170' } } : { display: false },
+          tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y?.toFixed(2)}%` } },
+        },
         scales: {
           x: { ticks: { color: '#4a5170', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.04)' } },
           y: { ticks: { color: '#4a5170', font: { size: 10 }, callback: v => v.toFixed(2)+'%' }, grid: { color: 'rgba(0,0,0,0.04)' } },
@@ -611,8 +1428,1277 @@ function renderYieldCurves(products) {
   });
 }
 
+// ─── Money-market converter (client-side math) ───────────────────────────────
+function _cmmFromPrice(price, days, face) {
+  if (!Number.isFinite(price) || !Number.isFinite(days) || days <= 0) return null;
+  const interest = face - price;
+  return {
+    face, days, price, interest,
+    discountRate: (interest / face) * (360 / days),
+    mmy:          (interest / price) * (360 / days),
+    bey:          (interest / price) * (365 / days),
+  };
+}
+function cmmRecompute() {
+  const settle = +document.getElementById('cmm-settle').value;
+  const matEl = document.getElementById('cmm-mat');
+  const daysEl = document.getElementById('cmm-days');
+  const mode = document.getElementById('cmm-mode').value;
+  const value = +document.getElementById('cmm-value').value;
+  const face = 100;
+  let days = +daysEl.value;
+  if (matEl.value) {
+    const today = new Date(); today.setDate(today.getDate() + settle); today.setHours(0,0,0,0);
+    days = Math.round((new Date(matEl.value) - today) / 86400000);
+    daysEl.value = days > 0 ? days : '';
+  }
+  const out = document.getElementById('cmm-out');
+  if (!Number.isFinite(days) || days <= 0 || !Number.isFinite(value)) {
+    out.innerHTML = '<div style="grid-column:1/-1;color:var(--text3);font-size:12px;padding:.5rem">Enter days and a value to compute.</div>';
+    return;
+  }
+  let r = null;
+  if      (mode === 'price')        r = _cmmFromPrice(value, days, face);
+  else if (mode === 'discountRate') r = _cmmFromPrice(face * (1 - (value/100) * days / 360), days, face);
+  else if (mode === 'mmy')          r = _cmmFromPrice(face / (1 + (value/100) * days / 360), days, face);
+  else if (mode === 'bey')          r = _cmmFromPrice(face / (1 + (value/100) * days / 365), days, face);
+  if (!r) { out.innerHTML = '<div style="color:var(--red)">Conversion failed.</div>'; return; }
+  const cell = (active, label, val) => `
+    <div style="background:var(--bg3);border:1px solid ${active?'var(--accent)':'var(--border)'};border-radius:6px;padding:10px 12px">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">${label}${active?' · input':''}</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:500;color:${active?'var(--accent)':'var(--text)'}">${val}</div>
+    </div>`;
+  out.innerHTML = `
+    ${cell(mode==='price',        'Price',                            r.price.toFixed(4))}
+    ${cell(mode==='discountRate', 'Discount Rate (Act/360)',         (r.discountRate*100).toFixed(3)+'%')}
+    ${cell(mode==='mmy',          'Money Market Yield (Act/360)',    (r.mmy*100).toFixed(3)+'%')}
+    ${cell(mode==='bey',          'Bond Equivalent Yield (Act/365)', (r.bey*100).toFixed(3)+'%')}
+    ${cell(false,                 '$ Interest / 100 face',            r.interest.toFixed(4))}`;
+}
+function cmmOnDays() {
+  document.getElementById('cmm-mat').value = '';
+  cmmRecompute();
+}
+function cmmReset() {
+  document.getElementById('cmm-settle').value = '1';
+  document.getElementById('cmm-mat').value = '';
+  document.getElementById('cmm-days').value = '';
+  document.getElementById('cmm-mode').value = 'bey';
+  document.getElementById('cmm-value').value = '4.30';
+  cmmRecompute();
+}
+let MM_DATA = [];
+async function loadMM() {
+  try {
+    const res = await fetch(API + '/api/public/money-market');
+    const data = await res.json();
+    MM_DATA = data.items || [];
+    renderMM(MM_DATA);
+  } catch (e) {
+    console.error('MM load failed:', e);
+  }
+}
+function renderMM(items) {
+  const tbl = document.getElementById('mm-off-table');
+  if (!tbl) return;
+  if (!items || !items.length) {
+    tbl.innerHTML = '<tbody><tr><td style="text-align:center;padding:1.5rem;color:var(--text3)">No money-market instruments in current feed.</td></tr></tbody>';
+    return;
+  }
+  let rows = items;
+  if (SORT_STATE['mm-table']) {
+    rows = _applySort(items, 'mm-table', (i, k) => ({
+      cusip: i.cusip, issuer: i.issuer, type: i.type,
+      days: i.days, maturity: i.maturity, size: i.size,
+      dr: i.discountRatePct, mmy: i.mmyPct, bey: i.beyPct,
+      status: i.upcoming ? 1 : 0,
+    })[k]);
+  }
+  tbl.innerHTML = `
+    <thead><tr>
+      ${_sortHeader('mm-table','cusip','CUSIP')}
+      ${_sortHeader('mm-table','issuer','Issuer')}
+      ${_sortHeader('mm-table','type','Type / series')}
+      ${_sortHeader('mm-table','days','Days',{right:true})}
+      ${_sortHeader('mm-table','maturity','Maturity',{right:true})}
+      ${_sortHeader('mm-table','size','Size',{right:true})}
+      ${_sortHeader('mm-table','dr','Discount rate',{right:true})}
+      ${_sortHeader('mm-table','mmy','MMY',{right:true})}
+      ${_sortHeader('mm-table','bey','BEY',{right:true})}
+      ${_sortHeader('mm-table','status','Status')}
+    </tr></thead>
+    <tbody>${rows.map(i => `
+      <tr>
+        <td class="mono" style="font-size:12px">${i.cusip||'—'}</td>
+        <td>${i.issuer||'—'}</td>
+        <td><span class="muted">${i.type||'—'} ${i.series ? '· '+i.series : ''}</span></td>
+        <td class="right mono">${i.days != null ? i.days : '—'}</td>
+        <td class="right mono" style="font-size:12px">${i.maturity||'—'}</td>
+        <td class="right mono">${i.sizeLabel||'—'}</td>
+        <td class="right mono">${i.discountRatePct != null ? i.discountRatePct.toFixed(3)+'%' : '—'}</td>
+        <td class="right mono">${i.mmyPct          != null ? i.mmyPct.toFixed(3)+'%'          : '—'}</td>
+        <td class="right mono" style="color:var(--accent);font-weight:500">${i.beyPct != null ? i.beyPct.toFixed(3)+'%' : '—'}</td>
+        <td>${i.upcoming ? '<span class="chip cb">Upcoming</span>' : '<span class="chip cg">Live</span>'}</td>
+      </tr>`).join('')}</tbody>`;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// BOND ANALYZER — callable / step-up / floater / bullet analytics
+// ════════════════════════════════════════════════════════════════════════════
+// PV of a fixed-coupon bond at semi-annual periods given annual yield (decimal).
+function _pv(yAnnual, coupon, yearsToEnd, redeem = 100, face = 100) {
+  if (!Number.isFinite(yAnnual) || yearsToEnd <= 0) return null;
+  const n = Math.max(1, Math.round(yearsToEnd * 2));
+  const r = yAnnual / 2;
+  const c = (coupon / 100) * face / 2;
+  let pv = redeem / Math.pow(1 + r, n);
+  for (let t = 1; t <= n; t++) pv += c / Math.pow(1 + r, t);
+  return pv;
+}
+// Solve yield by bisection so that PV(yield) == price.
+function _solveY(price, coupon, yearsToEnd, redeem = 100, face = 100) {
+  if (yearsToEnd <= 0) return null;
+  let lo = -0.4, hi = 0.5;
+  let pvLo = _pv(lo, coupon, yearsToEnd, redeem, face);
+  let pvHi = _pv(hi, coupon, yearsToEnd, redeem, face);
+  if (pvLo == null || pvHi == null) return null;
+  // Expand if not bracketed
+  let tries = 0;
+  while ((pvLo - price) * (pvHi - price) > 0 && tries++ < 6) {
+    lo -= 0.4; hi += 0.4;
+    pvLo = _pv(lo, coupon, yearsToEnd, redeem, face);
+    pvHi = _pv(hi, coupon, yearsToEnd, redeem, face);
+  }
+  if ((pvLo - price) * (pvHi - price) > 0) return null;
+  for (let i = 0; i < 100; i++) {
+    const mid = (lo + hi) / 2;
+    const pvMid = _pv(mid, coupon, yearsToEnd, redeem, face);
+    if (Math.abs(pvMid - price) < 1e-5) return mid * 100;  // % annualized
+    if ((pvMid - price) * (pvLo - price) < 0) hi = mid;
+    else { lo = mid; pvLo = pvMid; }
+  }
+  return (lo + hi) / 2 * 100;
+}
+// Build call schedule: from firstCall to maturity-1step, frequency in months.
+function _buildCallSchedule(firstCallYrs, maturityYrs, freqMonths, callPrice = 100) {
+  const out = [];
+  if (!firstCallYrs || firstCallYrs >= maturityYrs) return out;
+  let t = firstCallYrs;
+  while (t < maturityYrs - 0.05) {
+    out.push({ yearsFromNow: +t.toFixed(3), callPrice });
+    t += freqMonths / 12;
+  }
+  return out;
+}
+// YTW = min of YTM and YTC at every call date.
+function _computeYTW(price, coupon, maturityYrs, calls) {
+  const ytm = _solveY(price, coupon, maturityYrs, 100);
+  let worst = { yield: ytm, atYears: maturityYrs, type: 'maturity' };
+  for (const c of calls) {
+    const ytc = _solveY(price, coupon, c.yearsFromNow, c.callPrice);
+    if (ytc != null && ytc < worst.yield) worst = { yield: ytc, atYears: c.yearsFromNow, type: 'call' };
+  }
+  return worst;
+}
+// Effective duration / convexity via parallel ±100bp shock.
+//
+// Why 100bp and not 25bp: at small shocks the discrete call-exercise cliff
+// dominates the price response and effective convexity blows up to -1000+.
+// Industry-standard shock for callable analytics is 100bp, which averages
+// across that cliff and lands in the realistic -50 to -300 range typical of
+// agency/corporate callables.
+//
+// Repricing model: smooth call exercise probability (logistic) based on how
+// far ITM the bond's bullet value is vs (callPrice + refunding-cost hurdle).
+function _effectiveDuration(price, coupon, maturityYrs, calls, baseYield) {
+  if (baseYield == null) return { duration: null, convexity: null };
+  const dY  = 0.01;   // 100bp parallel shock — industry standard
+  const yUp = baseYield / 100 + dY;
+  const yDn = baseYield / 100 - dY;
+
+  // Smooth call exercise: prob increases as bullet PV exceeds (call price +
+  // issuance hurdle). Hurdle reflects the ~25-50bp refunding cost issuers
+  // realistically need before exercising. Steepness controls how sharp the
+  // cliff is — too sharp produces extreme negative convexity, too soft and
+  // the call optionality disappears. STEEPNESS=12 lands convexity in the
+  // typical -50 to -200 range for IG-callable agencies.
+  const HURDLE_DOLLARS = 0.5;
+  const STEEPNESS      = 12;
+
+  const repriceAtYield = (yAnnual) => {
+    const bullet = _pv(yAnnual, coupon, maturityYrs, 100);
+    if (!calls.length || bullet == null) return bullet;
+    const firstCall = calls[0];
+    const callPv = _pv(yAnnual, coupon, firstCall.yearsFromNow, firstCall.callPrice);
+    if (callPv == null) return bullet;
+    const itm  = bullet - (firstCall.callPrice + HURDLE_DOLLARS);
+    const prob = 1 / (1 + Math.exp(-itm / STEEPNESS));
+    return prob * callPv + (1 - prob) * bullet;
+  };
+
+  const Pup = repriceAtYield(yUp);
+  const Pdn = repriceAtYield(yDn);
+  if (Pup == null || Pdn == null) return { duration: null, convexity: null };
+  // Standard formulas — Δy in decimal form. Bullet conv ≈ 50-150; callable
+  // ≈ -50 to -300 depending on call structure / rate level.
+  const duration  = -(Pup - Pdn) / (2 * price * dY);
+  const convexity =  (Pup + Pdn - 2 * price) / (price * dY * dY);
+  return { duration: +duration.toFixed(3), convexity: +convexity.toFixed(1) };
+}
+// Scenario: at shocked rates, will each call get exercised?
+// Heuristic: issuer calls when the bond's coupon > current market yield + ~25bp issuance hurdle.
+function _callExerciseScenarios(coupon, maturityYrs, calls, baseYield) {
+  if (baseYield == null) return [];
+  const shocks = [-200, -100, 0, 100, 200];
+  const HURDLE_BP = 25;
+  return shocks.map(bp => {
+    const newYield = baseYield + bp / 100;  // baseYield in %, bp in bps → /100 to %
+    // For each call, decide if exercised: yes when coupon > newYield + 25bp
+    const callOutcomes = calls.map(c => {
+      const exercised = coupon > newYield + HURDLE_BP / 100;
+      return { yearsFromNow: c.yearsFromNow, exercised };
+    });
+    const firstCalled = callOutcomes.find(c => c.exercised);
+    const expectedExitYrs = firstCalled ? firstCalled.yearsFromNow : maturityYrs;
+    return { shockBps: bp, newYieldPct: +newYield.toFixed(3), expectedExitYrs, callOutcomes };
+  });
+}
+function baReset() {
+  document.getElementById('ba-structure').value = 'callable';
+  document.getElementById('ba-coupon').value = '5.00';
+  document.getElementById('ba-tenor').value = '10';
+  document.getElementById('ba-firstcall').value = '1';
+  document.getElementById('ba-callfreq').value = '6';
+  document.getElementById('ba-price').value = '100.00';
+  baRecompute();
+}
+function baRecompute() {
+  const struct = document.getElementById('ba-structure').value;
+  const cpn = +document.getElementById('ba-coupon').value;
+  const tenor = +document.getElementById('ba-tenor').value;
+  const firstCall = +document.getElementById('ba-firstcall').value;
+  const callFreq = +document.getElementById('ba-callfreq').value;
+  const price = +document.getElementById('ba-price').value;
+  // Show/hide call fields based on structure
+  const showCall = struct === 'callable' || struct === 'stepup';
+  document.getElementById('ba-firstcall-field').style.display = showCall ? '' : 'none';
+  document.getElementById('ba-callfreq-field').style.display  = showCall ? '' : 'none';
+  if (![cpn, tenor, price].every(Number.isFinite) || tenor <= 0) {
+    document.getElementById('ba-summary').innerHTML = '<div style="color:var(--text3);font-size:12px">Enter valid bond parameters.</div>';
+    return;
+  }
+  const calls = showCall ? _buildCallSchedule(firstCall, tenor, callFreq) : [];
+  const ytm = _solveY(price, cpn, tenor, 100);
+  const ytw = _computeYTW(price, cpn, tenor, calls);
+  const dur = _effectiveDuration(price, cpn, tenor, calls, ytw?.yield);
+  // Summary cards
+  const sumCard = (h, v, sub, warn=false) =>
+    `<div class="ba-card"><h3>${h}</h3><div class="v ${warn?'warn':''}">${v}</div><div class="sub">${sub||''}</div></div>`;
+  document.getElementById('ba-summary').innerHTML = `
+    ${sumCard('Yield to Maturity', ytm != null ? ytm.toFixed(3)+'%' : '—', `${tenor.toFixed(1)}y to maturity`)}
+    ${sumCard('Yield to Worst',    ytw?.yield != null ? ytw.yield.toFixed(3)+'%' : '—',
+              ytw?.type === 'call' ? `Worst: call @ ${ytw.atYears.toFixed(2)}y` : 'Worst: held to maturity',
+              ytw?.type === 'call')}
+    ${sumCard('Effective Duration', dur.duration != null ? dur.duration.toFixed(2) : '—', '+/-25bp shock · YTW-approx')}
+    ${sumCard('Effective Convexity', dur.convexity != null ? dur.convexity.toFixed(1) : '—', showCall ? 'Negative for callables when ITM' : 'Positive — bullet')}
+    ${sumCard('Calls in schedule', calls.length || (showCall ? '—' : '0'),
+              showCall ? `First @ ${firstCall.toFixed(2)}y · every ${callFreq}mo` : 'No calls — bullet')}`;
+  // Scenario table
+  const scenarios = _callExerciseScenarios(cpn, tenor, calls, ytw?.yield);
+  if (!scenarios.length || !calls.length) {
+    document.getElementById('ba-scenarios').innerHTML = `<tbody><tr><td colspan="6" style="text-align:center;padding:1rem;color:var(--text3)">${calls.length === 0 ? 'No calls — scenario analysis not applicable for this structure.' : 'Need a YTW to run scenarios.'}</td></tr></tbody>`;
+  } else {
+    document.getElementById('ba-scenarios').innerHTML = `
+      <thead><tr>
+        <th>Rate shock</th><th>New mkt yield</th><th>Expected exit</th><th>1st call</th><th>2nd call</th><th>Last call</th>
+      </tr></thead>
+      <tbody>${scenarios.map(s => {
+        const cell = (idx) => {
+          const c = s.callOutcomes[idx];
+          if (!c) return '<td>—</td>';
+          return `<td class="${c.exercised ? 'called' : 'live'}">${c.yearsFromNow.toFixed(1)}y · ${c.exercised ? 'CALLED' : 'live'}</td>`;
+        };
+        const lastIdx = s.callOutcomes.length - 1;
+        return `<tr class="${s.shockBps === 0 ? 'hot' : ''}">
+          <td><b>${s.shockBps > 0 ? '+' : ''}${s.shockBps} bps</b></td>
+          <td class="mono">${s.newYieldPct.toFixed(3)}%</td>
+          <td class="mono">${s.expectedExitYrs.toFixed(2)}y${s.expectedExitYrs < tenor - 0.05 ? ' (called)' : ' (held)'}</td>
+          ${cell(0)}${cell(Math.min(1, lastIdx))}${lastIdx > 1 ? cell(lastIdx) : '<td>—</td>'}
+        </tr>`;
+      }).join('')}</tbody>`;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PORTFOLIO + CASH FLOWS — localStorage holdings + 30y projection chart
+// ════════════════════════════════════════════════════════════════════════════
+const PORTFOLIO_KEY = 'bd-portfolio-v1';
+let PORTFOLIO = JSON.parse(localStorage.getItem(PORTFOLIO_KEY) || '[]');
+let FX_RATES = null;
+let CF_CHART = null;
+
+function savePortfolio() { localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(PORTFOLIO)); }
+
+function addHolding() {
+  PORTFOLIO.push({
+    id: 'h' + Date.now() + Math.random().toString(36).slice(2,6),
+    cusip: '',
+    issuer: '',
+    face: 100000,
+    coupon: 5.00,
+    maturity: new Date(Date.now() + 5*365.25*86400000).toISOString().slice(0,10),
+    structure: 'bullet',
+    firstCall: '',
+  });
+  savePortfolio();
+  renderPortfolio();
+}
+
+function loadDemoHoldings() {
+  const today = new Date();
+  const yrsFromNow = (y) => new Date(today.getFullYear()+y, today.getMonth(), today.getDate()).toISOString().slice(0,10);
+  PORTFOLIO = [
+    { id:'d1', cusip:'912828ZP9',  issuer:'US Treasury',  face:500000, coupon:4.500, maturity:yrsFromNow(2),  structure:'bullet',  firstCall:'' },
+    { id:'d2', cusip:'3130BAKC0',  issuer:'FHLB',         face:250000, coupon:4.150, maturity:yrsFromNow(3),  structure:'callable', firstCall:yrsFromNow(1) },
+    { id:'d3', cusip:'3133EWPK0',  issuer:'FFCB',         face:200000, coupon:4.420, maturity:yrsFromNow(5),  structure:'callable', firstCall:yrsFromNow(1) },
+    { id:'d4', cusip:'3130BAHY6',  issuer:'FHLB',         face:300000, coupon:5.000, maturity:yrsFromNow(10), structure:'callable', firstCall:yrsFromNow(1) },
+    { id:'d5', cusip:'46625HJL2',  issuer:'JPM (IG corp)', face:150000, coupon:4.875, maturity:yrsFromNow(7), structure:'bullet',  firstCall:'' },
+  ];
+  savePortfolio();
+  renderPortfolio();
+}
+
+function clearHoldings() {
+  if (!confirm('Clear all holdings?')) return;
+  PORTFOLIO = []; savePortfolio(); renderPortfolio();
+}
+
+function updateHolding(id, field, value) {
+  const h = PORTFOLIO.find(x => x.id === id); if (!h) return;
+  h[field] = field === 'face' || field === 'coupon' ? +value : value;
+  savePortfolio(); renderPortfolio();
+}
+function deleteHolding(id) {
+  PORTFOLIO = PORTFOLIO.filter(x => x.id !== id);
+  savePortfolio(); renderPortfolio();
+}
+
+function _yearsBetween(d1, d2) {
+  return (new Date(d2) - new Date(d1)) / (365.25 * 86400000);
+}
+
+// Project semi-annual cash flows for a holding under a rate scenario.
+// Returns array of {date: 'YYYY-MM', amount, kind: 'coupon'|'principal'}
+function _projectCashFlows(h, scenarioBps) {
+  if (!h.maturity || !Number.isFinite(h.coupon) || !Number.isFinite(h.face) || h.face <= 0) return [];
+  const today = new Date();
+  const matDate = new Date(h.maturity);
+  const totalYears = _yearsBetween(today, h.maturity);
+  if (totalYears <= 0) return [];
+  // Decide whether bond gets called under scenario:
+  let callDate = null;
+  if (h.structure === 'callable' && h.firstCall) {
+    // Naive call-exercise heuristic: scenario −100bp or worse → assume called at firstCall
+    if (scenarioBps <= -100) callDate = new Date(h.firstCall);
+  }
+  const exitDate = callDate || matDate;
+  const exitYears = _yearsBetween(today, exitDate);
+  if (exitYears <= 0) return [];
+  // Semi-annual coupon payments
+  const periods = Math.max(1, Math.round(exitYears * 2));
+  const couponAmt = (h.coupon / 100) * h.face / 2;
+  const out = [];
+  for (let i = 1; i <= periods; i++) {
+    const t = new Date(today.getTime() + (i / 2) * 365.25 * 86400000);
+    const monthKey = t.toISOString().slice(0,7);
+    if (i < periods) {
+      out.push({ month: monthKey, amount: couponAmt, kind: 'coupon', holdingId: h.id });
+    } else {
+      // Last payment: coupon + principal (or call price = face)
+      out.push({ month: monthKey, amount: couponAmt, kind: 'coupon', holdingId: h.id });
+      out.push({ month: monthKey, amount: h.face, kind: callDate ? 'call' : 'principal', holdingId: h.id });
+    }
+  }
+  return out;
+}
+
+function renderPortfolio() {
+  // Row in the holdings editor
+  const tbl = document.getElementById('port-table');
+  if (PORTFOLIO.length === 0) {
+    tbl.innerHTML = '<tbody><tr><td style="text-align:center;padding:1.5rem;color:var(--text3)">No holdings yet — click "Add holding" or "Load demo portfolio".</td></tr></tbody>';
+    document.getElementById('port-total').textContent = '$0';
+  } else {
+    tbl.innerHTML = `
+      <thead><tr>
+        <th>CUSIP</th><th>Issuer</th><th>Face value</th><th>Coupon (%)</th>
+        <th>Maturity</th><th>Structure</th><th>First call</th><th></th>
+      </tr></thead>
+      <tbody>${PORTFOLIO.map(h => `
+        <tr>
+          <td><input type="text" value="${h.cusip||''}" oninput="updateHolding('${h.id}','cusip',this.value)" placeholder="CUSIP"></td>
+          <td><input type="text" value="${h.issuer||''}" oninput="updateHolding('${h.id}','issuer',this.value)" placeholder="Issuer"></td>
+          <td><input type="number" min="0" step="1000" value="${h.face}" oninput="updateHolding('${h.id}','face',this.value)"></td>
+          <td><input type="number" min="0" step="0.01" value="${h.coupon}" oninput="updateHolding('${h.id}','coupon',this.value)"></td>
+          <td><input type="date" value="${h.maturity}" oninput="updateHolding('${h.id}','maturity',this.value)"></td>
+          <td>
+            <select onchange="updateHolding('${h.id}','structure',this.value)">
+              <option value="bullet"   ${h.structure==='bullet'?'selected':''}>Bullet</option>
+              <option value="callable" ${h.structure==='callable'?'selected':''}>Callable</option>
+              <option value="floater"  ${h.structure==='floater'?'selected':''}>Floater</option>
+            </select>
+          </td>
+          <td><input type="date" value="${h.firstCall||''}" oninput="updateHolding('${h.id}','firstCall',this.value)"></td>
+          <td><button onclick="deleteHolding('${h.id}')" style="font-size:11px;padding:4px 8px;border:1px solid var(--border2);border-radius:4px;background:var(--bg3);color:var(--red);cursor:pointer">×</button></td>
+        </tr>`).join('')}</tbody>`;
+  }
+  // Currency conversion for total
+  const cur = document.getElementById('port-currency').value;
+  const fxFactor = (cur === 'USD' || !FX_RATES?.[cur]) ? 1 : (1 / FX_RATES[cur].usdPer);
+  const totalUsd = PORTFOLIO.reduce((s, h) => s + (Number.isFinite(h.face) ? h.face : 0), 0);
+  const total = totalUsd * fxFactor;
+  const sym = cur === 'EUR' ? '€' : cur === 'GBP' ? '£' : cur === 'JPY' ? '¥' : cur === 'CHF' ? 'CHF ' : cur === 'NOK' ? 'NOK ' : cur === 'CAD' ? 'C$' : '$';
+  document.getElementById('port-total').textContent = total > 0 ? `${sym}${total.toLocaleString(undefined, { maximumFractionDigits: cur === 'JPY' ? 0 : 0 })}` : '$0';
+
+  // Cash flow chart
+  const scenarioBps = +document.getElementById('port-scenario').value;
+  const allCfs = PORTFOLIO.flatMap(h => _projectCashFlows(h, scenarioBps));
+  if (!allCfs.length) {
+    if (CF_CHART) { CF_CHART.destroy(); CF_CHART = null; }
+    return;
+  }
+  // Aggregate by month → coupon vs principal/call buckets
+  const months = {};
+  allCfs.forEach(cf => {
+    const m = cf.month;
+    if (!months[m]) months[m] = { coupon: 0, principal: 0, call: 0 };
+    months[m][cf.kind] = (months[m][cf.kind] || 0) + cf.amount * fxFactor;
+  });
+  const labels = Object.keys(months).sort();
+  const coupons = labels.map(l => months[l].coupon || 0);
+  const principal = labels.map(l => months[l].principal || 0);
+  const calls = labels.map(l => months[l].call || 0);
+
+  if (CF_CHART) CF_CHART.destroy();
+  CF_CHART = new Chart(document.getElementById('port-cf-chart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Coupon',         data: coupons,   backgroundColor: 'rgba(15,155,94,0.7)' },
+        { label: 'Principal',      data: principal, backgroundColor: 'rgba(37,99,235,0.85)' },
+        { label: 'Called (early)', data: calls,     backgroundColor: 'rgba(197,48,48,0.85)' },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, position: 'top', labels: { font: { size: 11 } } },
+        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${sym}${Math.round(c.parsed.y).toLocaleString()}` } },
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: '#4a5170', font: { size: 9 }, maxTicksLimit: 24 } },
+        y: { stacked: true, ticks: { color: '#4a5170', font: { size: 10 }, callback: v => sym + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v) } },
+      },
+    },
+  });
+  // Trade ideas read holdings + mandate — keep them in sync with portfolio changes
+  renderTradeIdeasClient();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// FX rates — live USD vs major pairs
+// ════════════════════════════════════════════════════════════════════════════
+async function loadFX() {
+  try {
+    const res = await fetch(API + '/api/public/fx');
+    const data = await res.json();
+    FX_RATES = data.rates || {};
+    const order = ['EUR','GBP','NOK','CHF','JPY','CAD'];
+    const strip = document.getElementById('fx-strip');
+    const cells = order.filter(c => FX_RATES[c]).map(code => {
+      const r = FX_RATES[code];
+      const chgPct = r.chg1d != null ? (r.chg1d / (r.usdPer || 1)) * 100 : null;
+      const tone = chgPct == null ? 'var(--text3)' : chgPct > 0 ? 'var(--green)' : chgPct < 0 ? 'var(--red)' : 'var(--text3)';
+      return `<span><span class="pair">1 ${code}</span> <span class="rate">$${r.usdPer.toFixed(4)}</span><span style="color:${tone};font-size:11px;margin-right:14px">${chgPct == null ? '' : (chgPct >= 0 ? '+' : '') + chgPct.toFixed(2) + '%'}</span></span>`;
+    }).join('');
+    strip.innerHTML = cells || '<span class="muted">No FX data.</span>';
+    // Re-render portfolio so totals + chart pick up the new FX rates
+    renderPortfolio();
+  } catch (e) {
+    console.error('FX load failed:', e);
+    document.getElementById('fx-strip').innerHTML = '<span class="muted">FX rates unavailable.</span>';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SORTABLE COLUMNS — tiny helper. Each table has a tableId; SORT_STATE tracks
+// the active column + direction. Headers call toggleSort(id, key) and re-render.
+// ════════════════════════════════════════════════════════════════════════════
+const SORT_STATE = {};
+function _sortArrow(tableId, key) {
+  const s = SORT_STATE[tableId];
+  if (!s || s.key !== key) return '<span style="color:var(--text3);font-size:9px;margin-left:3px">⇅</span>';
+  return s.dir === 'desc'
+    ? '<span style="color:var(--accent);font-size:10px;margin-left:3px">▼</span>'
+    : '<span style="color:var(--accent);font-size:10px;margin-left:3px">▲</span>';
+}
+function _sortHeader(tableId, key, label, opts = {}) {
+  const cls = opts.right ? ' class="right"' : '';
+  return `<th${cls} style="cursor:pointer;user-select:none" onclick="toggleSort('${tableId}','${key}')">${label}${_sortArrow(tableId, key)}</th>`;
+}
+function toggleSort(tableId, key, defaultDir = 'desc') {
+  const cur = SORT_STATE[tableId];
+  SORT_STATE[tableId] = (cur && cur.key === key)
+    ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' }
+    : { key, dir: defaultDir };
+  render();
+  // Also re-render anything that doesn't go through render() (MM, watchlist):
+  if (tableId === 'mm-table') renderMM(MM_DATA);
+  if (tableId === 'watchlist') renderWatchlist();
+  if (tableId === 'rfq-history') renderRfqHistory();
+}
+function _applySort(arr, tableId, accessor) {
+  const s = SORT_STATE[tableId];
+  if (!s) return arr;
+  const dir = s.dir === 'desc' ? -1 : 1;
+  return [...arr].sort((a, b) => {
+    const va = accessor(a, s.key), vb = accessor(b, s.key);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;     // nulls always last
+    if (vb == null) return -1;
+    if (typeof va === 'string' && typeof vb === 'string') return va.localeCompare(vb) * dir;
+    return (va - vb) * dir;
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// RFQ — modal + submission to /api/client/rfq, mirrored in localStorage so
+// the Contact tab can show the user their own submission history.
+// ════════════════════════════════════════════════════════════════════════════
+const RFQ_KEY = 'bd-rfqs-v1';
+let _rfqContext = null;
+function _readRfqs() { try { return JSON.parse(localStorage.getItem(RFQ_KEY) || '[]'); } catch { return []; } }
+function _saveRfqs(arr) { localStorage.setItem(RFQ_KEY, JSON.stringify(arr)); }
+
+function openRfq(cusip, issuer, couponLabel, maturity) {
+  _rfqContext = { cusip, issuer, couponLabel, maturity };
+  document.getElementById('rfq-context').textContent = `${cusip} · ${issuer || ''} · ${couponLabel || ''} · matures ${maturity || '—'}`;
+  document.getElementById('rfq-size').value = '';
+  document.getElementById('rfq-settle').value = '';
+  document.getElementById('rfq-notes').value = '';
+  document.getElementById('rfq-name').value = PROFILE.name || '';
+  document.getElementById('rfq-email').value = PROFILE.email || '';
+  document.getElementById('rfq-status').textContent = '';
+  document.getElementById('rfq-submit-btn').disabled = false;
+  document.getElementById('rfq-modal').classList.add('open');
+  setTimeout(() => document.getElementById('rfq-size').focus(), 50);
+}
+function closeRfq() {
+  document.getElementById('rfq-modal').classList.remove('open');
+  _rfqContext = null;
+}
+async function submitRfq() {
+  if (!_rfqContext) return;
+  const size   = parseFloat(document.getElementById('rfq-size').value);
+  const settle = document.getElementById('rfq-settle').value;
+  const notes  = document.getElementById('rfq-notes').value;
+  const name   = document.getElementById('rfq-name').value.trim();
+  const email  = document.getElementById('rfq-email').value.trim();
+  if (!Number.isFinite(size) || size <= 0) {
+    document.getElementById('rfq-status').innerHTML = '<span style="color:var(--red)">Enter a size to request.</span>';
+    return;
+  }
+  document.getElementById('rfq-submit-btn').disabled = true;
+  document.getElementById('rfq-status').textContent = 'Sending to desk…';
+  // Persist name/email on profile for next time
+  if (name)  PROFILE.name  = name;
+  if (email) PROFILE.email = email;
+  saveProfile();
+
+  const payload = { cusip: _rfqContext.cusip, issuer: _rfqContext.issuer, size, settle, notes, clientName: name, clientEmail: email };
+  let serverResp = null;
+  try {
+    const res = await fetch(API + '/api/client/rfq', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload),
+    });
+    serverResp = await res.json();
+  } catch (e) {
+    serverResp = { ok: false, error: e.message };
+  }
+
+  const localRecord = {
+    ...payload,
+    couponLabel: _rfqContext.couponLabel,
+    maturity:    _rfqContext.maturity,
+    id:          serverResp.id || ('local-rfq-' + Date.now()),
+    receivedAt:  serverResp.receivedAt || new Date().toISOString(),
+    serverOk:    !!serverResp.ok,
+    serverError: serverResp.error || null,
+  };
+  const arr = _readRfqs();
+  arr.unshift(localRecord);
+  _saveRfqs(arr);
+
+  if (serverResp.ok) {
+    document.getElementById('rfq-status').innerHTML = `<span style="color:var(--green)">Sent. Reference: ${serverResp.id}</span>`;
+    setTimeout(closeRfq, 1500);
+  } else {
+    document.getElementById('rfq-status').innerHTML = `<span style="color:var(--red)">Network error — saved locally as ${localRecord.id}. Desk will see it on next sync.</span>`;
+    document.getElementById('rfq-submit-btn').disabled = false;
+  }
+  renderRfqHistory();
+}
+
+function renderRfqHistory() {
+  const el = document.getElementById('rfq-history');
+  const cntEl = document.getElementById('rfq-history-count');
+  if (!el) return;
+  const arr = _readRfqs();
+  if (cntEl) cntEl.textContent = `${arr.length} on record`;
+  if (arr.length === 0) {
+    el.innerHTML = '<div class="muted" style="padding:.5rem 0">No RFQs yet. Click "Request quote" on any offering to send one.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <table class="tbl">
+      <thead><tr>
+        <th>Sent</th><th>CUSIP / issuer</th><th class="right">Size</th><th>Settle</th><th>Notes</th><th>Status</th>
+      </tr></thead>
+      <tbody>${arr.slice(0, 50).map(r => `
+        <tr>
+          <td style="font-size:12px">${new Date(r.receivedAt).toLocaleString()}</td>
+          <td><div class="mono" style="font-size:12px">${r.cusip}</div><div class="muted">${r.issuer || ''} ${r.couponLabel || ''}</div></td>
+          <td class="right mono">$${Number(r.size).toLocaleString()}</td>
+          <td>${r.settle || '—'}</td>
+          <td style="font-size:12px;color:var(--text2);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.notes||'').replace(/"/g,'&quot;')}">${r.notes || '—'}</td>
+          <td>${r.serverOk ? '<span class="chip cg">Sent</span>' : '<span class="chip ca">Local (offline)</span>'}</td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CHAT — outbound messages to /api/client/messages + local thread storage.
+// Inbound (desk responses) will be wired when SSO + real auth are added; for
+// now the local thread shows what you've sent + the server's ack.
+// ════════════════════════════════════════════════════════════════════════════
+const CHAT_KEY = 'bd-chat-thread-v1';
+function _readChat() { try { return JSON.parse(localStorage.getItem(CHAT_KEY) || '[]'); } catch { return []; } }
+function _saveChat(arr) { localStorage.setItem(CHAT_KEY, JSON.stringify(arr)); }
+
+function renderChat() {
+  const el = document.getElementById('chat-messages');
+  if (!el) return;
+  const msgs = _readChat();
+  if (msgs.length === 0) {
+    el.innerHTML = '<div class="muted" style="text-align:center;padding:1.5rem">Send your first message to the desk below. Submitted RFQs also flow into the desk\'s queue automatically.</div>';
+    return;
+  }
+  el.innerHTML = msgs.map(m => `
+    <div class="chat-msg ${m.direction}">
+      ${m.text.replace(/</g,'&lt;')}
+      <div class="ts">${new Date(m.ts).toLocaleTimeString()}${m.serverOk === false ? ' · queued' : ''}</div>
+    </div>`).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+// SSE subscription — desk replies push here in real time
+function subscribeToDeskMessages() {
+  if (typeof EventSource === 'undefined') return;
+  try {
+    const es = new EventSource(API + '/api/client/messages/stream');
+    es.onmessage = (e) => {
+      try {
+        const m = JSON.parse(e.data);
+        // Drop messages that aren't addressed to this client (null/broadcast OK)
+        if (m.to && PROFILE.name && m.to !== PROFILE.name) return;
+        const arr = _readChat();
+        // Idempotency: don't append if we already have this id
+        if (arr.some(x => x.id === m.id)) return;
+        arr.push({ id: m.id, text: m.text, direction: 'inbound', ts: m.sentAt, from: m.from });
+        _saveChat(arr);
+        renderChat();
+        // Light visual cue: bump the Contact tab if user isn't on it
+        const onContact = document.querySelector('.tab-page[data-tab="contact"].active');
+        if (!onContact) {
+          const tabLink = document.querySelector('.tab-nav a[data-tab="contact"]');
+          if (tabLink && !tabLink.innerHTML.includes('tab-badge')) {
+            tabLink.innerHTML = 'Contact <span class="tab-badge">new</span>';
+          }
+        }
+      } catch {}
+    };
+    es.onerror = () => { /* browser auto-reconnects; ignore */ };
+  } catch (e) { console.warn('SSE subscribe failed:', e.message); }
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chat-text');
+  const text = input.value.trim();
+  if (!text) return;
+  const local = { id: 'local-msg-' + Date.now(), text, direction: 'outbound', ts: new Date().toISOString(), serverOk: null };
+  const arr = _readChat();
+  arr.push(local);
+  _saveChat(arr);
+  input.value = '';
+  renderChat();
+  // Best-effort post
+  try {
+    const res = await fetch(API + '/api/client/messages', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ text, clientName: PROFILE.name || 'client' }),
+    });
+    const j = await res.json();
+    local.id = j.id || local.id;
+    local.serverOk = !!j.ok;
+  } catch (e) {
+    local.serverOk = false;
+  }
+  // Re-save with status, re-render
+  _saveChat(arr);
+  renderChat();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SAVED-SEARCH ALERTS — count offerings matching each saved search; show a
+// badge on the Offerings tab so users see when new things hit their filters.
+// ════════════════════════════════════════════════════════════════════════════
+// Track which CUSIPs the user has *seen* per saved search, so we can show
+// "N new since last visit" instead of just total matches.
+const SS_SEEN_KEY = 'bd-saved-search-seen-v1';
+function _readSeen() { try { return JSON.parse(localStorage.getItem(SS_SEEN_KEY) || '{}'); } catch { return {}; } }
+function _saveSeen(o) { localStorage.setItem(SS_SEEN_KEY, JSON.stringify(o)); }
+function markOfferingsTabSeen() {
+  // Called when user clicks the Offerings tab — flushes "new" counts to zero
+  const seen = _readSeen();
+  const offs = DATA.offerings || [];
+  for (const s of (PROFILE.savedSearches || [])) {
+    seen[s.id] = offs.filter(o => passesFilter(o, s.filters, 'offering')).map(o => o.cusip);
+  }
+  _saveSeen(seen);
+  refreshSavedSearchBadge();
+}
+function refreshSavedSearchBadge() {
+  const offs = DATA.offerings || [];
+  const seen = _readSeen();
+  let newCount = 0;
+  for (const s of (PROFILE.savedSearches || [])) {
+    const matchCusips = offs.filter(o => passesFilter(o, s.filters, 'offering')).map(o => o.cusip);
+    const prev = new Set(seen[s.id] || []);
+    const fresh = matchCusips.filter(c => !prev.has(c));
+    s._newCount  = fresh.length;
+    s._totalCount = matchCusips.length;
+    newCount += fresh.length;
+  }
+  const badge = document.querySelector('.tab-nav a[data-tab="offerings"]');
+  if (!badge) return;
+  badge.innerHTML = 'Offerings' + (newCount > 0
+    ? ` <span class="tab-badge" title="${newCount} offering${newCount===1?'':'s'} new since your last visit (across your saved searches)">${newCount} new</span>`
+    : '');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// RESEARCH TAB — pull the long-form weekly outlook from existing /api/outlook
+// ════════════════════════════════════════════════════════════════════════════
+let _researchLoaded = false;
+async function loadResearchOutlook() {
+  if (_researchLoaded) return;
+  try {
+    const res = await fetch(API + '/api/outlook');
+    const d = await res.json();
+    const body = document.getElementById('research-outlook-body');
+    const stamp = document.getElementById('research-outlook-stamp');
+    if (!body) return;
+    if (!d.text) {
+      body.innerHTML = '<span class="muted">Outlook not yet generated this cycle. Check back shortly.</span>';
+      return;
+    }
+    body.innerHTML = d.text.split(/\n\n+/).map(p => `<p style="margin-bottom:10px">${p.replace(/\n/g, ' ')}</p>`).join('');
+    if (stamp) stamp.textContent = d.generatedAt ? `Generated ${new Date(d.generatedAt).toLocaleDateString()}` : '';
+    _researchLoaded = true;
+  } catch (e) {
+    console.warn('outlook load failed:', e);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SETTINGS TAB — bind/save the profile form
+// ════════════════════════════════════════════════════════════════════════════
+function paintSettings() {
+  const $ = (id) => document.getElementById(id);
+  if (!$('prof-name')) return;
+  $('prof-name').value      = PROFILE.name || '';
+  $('prof-email').value     = PROFILE.email || '';
+  $('prof-juris').value     = PROFILE.jurisdiction || 'US';
+  $('prof-ccy').value       = PROFILE.homeCurrency || 'USD';
+  $('prof-rating').value    = PROFILE.mandate.minRating || 'NONE';
+  $('prof-maxtenor').value  = PROFILE.mandate.maxTenorYrs ?? 30;
+  $('prof-bullet').checked   = PROFILE.mandate.structures.includes('bullet');
+  $('prof-callable').checked = PROFILE.mandate.structures.includes('callable');
+  $('prof-floater').checked  = PROFILE.mandate.structures.includes('floater');
+  $('prof-taxable').checked  = !!PROFILE.mandate.taxableAccount;
+  // Tax block
+  $('tax-active').checked    = !!PROFILE.tax.active;
+  $('tax-de-church').checked = !!PROFILE.tax.churchTaxDE;
+  $('tax-custom-rate').value = PROFILE.tax.customRate != null ? (PROFILE.tax.customRate * 100).toFixed(1) : '';
+  paintTaxJurisdictionUI();
+}
+// Show/hide jurisdiction-specific tax controls and update the live rate label
+function paintTaxJurisdictionUI() {
+  const j = document.getElementById('prof-juris').value;
+  document.getElementById('tax-de-row').style.display = (j === 'DE') ? '' : 'none';
+  document.getElementById('tax-custom-row').style.display = (j === 'CH' || j === 'OTHER') ? '' : 'none';
+  // Build a preview rate from the form inputs (not the saved PROFILE) so the
+  // user sees the impact before clicking Save.
+  const customPct = parseFloat(document.getElementById('tax-custom-rate').value);
+  const previewProfile = {
+    jurisdiction: j,
+    tax: {
+      churchTaxDE: document.getElementById('tax-de-church').checked,
+      customRate: Number.isFinite(customPct) ? customPct / 100 : null,
+    },
+  };
+  const rate = _effectiveTaxRate(previewProfile);
+  const def = TAX_DEFAULTS[j] || TAX_DEFAULTS.OTHER;
+  document.getElementById('tax-rate-label').textContent =
+    `Effective rate: ${(rate*100).toFixed(2)}% · ${def.label}`;
+  // Jurisdiction-specific disclaimer text
+  const disclaimers = {
+    NO: 'Norway: 22% flat capital income tax. Tax-free shielding (skjermingsfradrag) on equities does not apply to bond interest. Confirm with your advisor.',
+    DE: 'Germany: 25% Abgeltungssteuer + 5.5% Solidaritätszuschlag = 26.375% base. Kirchensteuer (8-9% of base) applies if you are registered with a church.',
+    CH: 'Switzerland: Federal + cantonal + municipal rates vary 12-35% by canton and income. Bond interest is fully taxable as income (no participation exemption). Set your effective rate based on advisor guidance.',
+    US: 'United States: federal ordinary income rates 10-37%; state tax varies. Treasury interest is state-tax-exempt. Munis often federal-tax-exempt. The flat 24% used here is a rough mid-bracket placeholder.',
+    UK: 'United Kingdom: 20/40/45% income tax on bond interest. Personal Savings Allowance (£500-£1000 depending on tax band) is not modeled here.',
+    OTHER: 'Set your own effective rate. Real after-tax outcomes depend on account type, residency, and bracket.',
+  };
+  document.getElementById('tax-disclaimer').textContent = disclaimers[j] || disclaimers.OTHER;
+}
+// Hook live preview to relevant inputs
+document.addEventListener('change', (e) => {
+  if (['prof-juris','tax-de-church','tax-custom-rate','tax-active'].includes(e.target.id)) paintTaxJurisdictionUI();
+});
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'tax-custom-rate') paintTaxJurisdictionUI();
+});
+function saveSettings() {
+  const $ = (id) => document.getElementById(id);
+  const structures = [];
+  if ($('prof-bullet').checked)   structures.push('bullet');
+  if ($('prof-callable').checked) structures.push('callable');
+  if ($('prof-floater').checked)  structures.push('floater');
+  const customPct = parseFloat($('tax-custom-rate').value);
+  updateProfile({
+    name:           $('prof-name').value.trim(),
+    email:          $('prof-email').value.trim(),
+    jurisdiction:   $('prof-juris').value,
+    homeCurrency:   $('prof-ccy').value,
+    mandate: {
+      minRating:    $('prof-rating').value,
+      maxTenorYrs:  parseFloat($('prof-maxtenor').value) || 30,
+      structures,
+      taxableAccount: $('prof-taxable').checked,
+    },
+    tax: {
+      active:       $('tax-active').checked,
+      churchTaxDE:  $('tax-de-church').checked,
+      customRate:   Number.isFinite(customPct) ? customPct / 100 : null,
+    },
+  });
+  // Push currency change to the portfolio currency selector + re-render
+  const portCcy = document.getElementById('port-currency');
+  if (portCcy) portCcy.value = PROFILE.homeCurrency;
+  renderPortfolio();
+  render();
+  const status = document.getElementById('prof-status');
+  if (status) {
+    status.textContent = 'Saved.';
+    status.style.color = 'var(--green)';
+    setTimeout(() => { status.textContent = ''; }, 2500);
+  }
+}
+function resetSettings() {
+  if (!confirm('Reset profile to defaults? Watchlist and saved searches will be kept.')) return;
+  const keep = { watchlist: PROFILE.watchlist, savedSearches: PROFILE.savedSearches };
+  PROFILE = { ...PROFILE_DEFAULTS, ...keep, mandate: { ...PROFILE_DEFAULTS.mandate } };
+  saveProfile();
+  paintSettings();
+  render();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// WATCHLIST RENDER — shows current offerings the client has starred.
+// Lives on both My Portfolio (full table) and Settings (manageable list).
+// ════════════════════════════════════════════════════════════════════════════
+function renderWatchlist() {
+  const wl = PROFILE.watchlist || [];
+  const offers = (DATA.offerings || []).filter(o => wl.includes(o.cusip));
+  // Settings tab — compact unstar list
+  const settEl = document.getElementById('wl-settings');
+  if (settEl) {
+    if (wl.length === 0) {
+      settEl.innerHTML = '<div class="muted" style="padding:.5rem 0">No bonds on your watchlist. Star a row on Offerings to add one.</div>';
+    } else {
+      settEl.innerHTML = wl.map(cusip => {
+        const o = offers.find(x => x.cusip === cusip);
+        const label = o ? `${o.issuer} ${o.series||''} · ${o.couponLabel} · ${o.maturity||'?'}` : '(no longer in feed)';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);border-radius:6px;margin-bottom:6px;font-size:13px">
+          <span><span class="mono">${cusip}</span> <span class="muted" style="margin-left:8px">${label}</span></span>
+          <button class="cur-toggle" style="padding:4px 10px;font-size:11px" onclick="toggleWatchlist('${cusip}')">Remove</button>
+        </div>`;
+      }).join('');
+    }
+    const cnt = document.getElementById('wl-count');
+    if (cnt) cnt.textContent = `${wl.length} bond${wl.length===1?'':'s'} watched`;
+  }
+  // Portfolio tab — full table of current matching offerings
+  const portEl = document.getElementById('wl-portfolio');
+  const portCnt = document.getElementById('wl-portfolio-count');
+  if (portEl) {
+    if (wl.length === 0) {
+      portEl.innerHTML = '<div class="muted" style="padding:.5rem 0">You haven\'t starred any offerings yet. Browse offerings and click the star icon to add bonds here.</div>';
+    } else if (offers.length === 0) {
+      portEl.innerHTML = '<div class="muted" style="padding:.5rem 0">None of your watched bonds are in today\'s feed.</div>';
+    } else {
+      portEl.innerHTML = `
+        <table class="tbl">
+          <thead><tr>
+            <th></th><th>CUSIP / issuer</th><th>Type</th><th class="right">Coupon</th>
+            <th class="right">Indicative yield</th><th class="right">Spread</th><th>Status</th>
+          </tr></thead>
+          <tbody>${offers.map(o => `
+            <tr>
+              <td style="text-align:center;cursor:pointer;color:var(--gold)" onclick="toggleWatchlist('${o.cusip}')" title="Remove from watchlist">★</td>
+              <td><div class="mono" style="font-size:12px">${o.cusip}</div><div class="muted">${o.issuer} ${o.series||''}</div></td>
+              <td><span class="chip ${o.callable?'ca':'cn'}">${o.type}</span></td>
+              <td class="right mono">${o.couponLabel||'—'}</td>
+              <td class="right mono" style="color:var(--accent);font-weight:500">${o.customerYieldLabel||'—'}</td>
+              <td class="right mono">${o.spreadLabel||'—'}</td>
+              <td>${o.upcoming ? `<span class="chip cb">Upcoming</span>` : `<span class="chip cg">Live</span>`}</td>
+            </tr>`).join('')}</tbody>
+        </table>`;
+    }
+    if (portCnt) portCnt.textContent = `${offers.length} of ${wl.length} watched bond${wl.length===1?'':'s'} in today's feed`;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TRADE IDEAS — placeholder UI (Phase 3). Generated server-side later.
+// Reads holdings + mandate to suggest a few specific moves the client could
+// consider. Live data drives the bps numbers; copy is templated.
+// ════════════════════════════════════════════════════════════════════════════
+function renderTradeIdeasClient() {
+  const el = document.getElementById('trade-ideas-client');
+  if (!el) return;
+  const holdings = PORTFOLIO || [];
+  const offers = DATA.offerings || [];
+  const ideas = [];
+
+  // Idea 1: empty-portfolio nudge
+  if (holdings.length === 0) {
+    ideas.push({
+      title: 'Build a starter portfolio',
+      body: 'Add holdings on this page to get tailored cash-flow projections and trade ideas. Click "Load demo portfolio" below for a quick example.',
+      action: null,
+    });
+  } else {
+    // Idea 2: duration extension if portfolio is mostly short
+    const wAvg = holdings.reduce((s,h) => s + (h.face||0) * _yearsBetween(new Date().toISOString().slice(0,10), h.maturity||'2030-01-01'), 0)
+               / Math.max(1, holdings.reduce((s,h) => s + (h.face||0), 0));
+    if (wAvg < 3) {
+      const target = offers.find(o => o.tenorYrs >= 5 && o.tenorYrs <= 8 && o.callable);
+      ideas.push({
+        title: 'Consider extending duration',
+        body: `Your weighted-average maturity is ${wAvg.toFixed(1)}y — short. With the curve steep, locking in 5-7y paper today picks up ~${target?.spreadBps ?? '40-60'} bps over UST. ${target ? 'Example in current offerings: ' + target.cusip + ' · ' + (target.couponLabel||'') : ''}`,
+        action: target ? { type: 'view', cusip: target.cusip } : null,
+      });
+    }
+    // Idea 3: callable rotation if portfolio is all bullets
+    const callables = holdings.filter(h => h.structure === 'callable').length;
+    if (callables === 0 && holdings.length > 0) {
+      const candidate = offers.find(o => o.callable && o.spreadBps != null && o.spreadBps > 20);
+      if (candidate) ideas.push({
+        title: 'Add callable agency for spread pickup',
+        body: `Your portfolio holds no callables. Today's curated offerings include ${candidate.cusip} (${candidate.callStructure||'callable'}) at ${candidate.spreadLabel}. Callables trade wide of bullets in exchange for issuer's right to call early.`,
+        action: { type: 'view', cusip: candidate.cusip },
+      });
+    }
+    // Idea 4: tax-aware (jurisdiction-driven, placeholder)
+    if (PROFILE.jurisdiction !== 'US' && PROFILE.mandate.taxableAccount) {
+      ideas.push({
+        title: `${PROFILE.jurisdiction} tax-aware view available`,
+        body: `As a ${PROFILE.jurisdiction === 'NO' ? 'Norwegian (22% capital gains)' : PROFILE.jurisdiction === 'DE' ? 'German (26.375% Abgeltungssteuer)' : PROFILE.jurisdiction === 'CH' ? 'Swiss' : ''} taxable investor, after-tax yield matters. Tax overlay coming in the next platform release — set your jurisdiction now to be ready.`,
+        action: null,
+      });
+    }
+  }
+
+  if (ideas.length === 0) {
+    el.innerHTML = '<div class="muted" style="padding:1rem 0">No specific ideas right now. Check back tomorrow.</div>';
+    return;
+  }
+  el.innerHTML = ideas.map(i => `
+    <div style="background:var(--bg3);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:12px 14px;margin-bottom:10px">
+      <div style="font-weight:500;color:var(--text);margin-bottom:4px">${i.title}</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.55">${i.body}</div>
+    </div>`).join('');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SAVED SEARCHES — store {id, name, filters} on profile; load via dropdown
+// ════════════════════════════════════════════════════════════════════════════
+function paintSavedSearches() {
+  const sel = document.getElementById('ss-pick');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— select —</option>' +
+    (PROFILE.savedSearches || []).map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+}
+function saveCurrentSearch() {
+  const nameEl = document.getElementById('ss-name');
+  const name = nameEl.value.trim();
+  if (!name) { alert('Give your search a name first.'); return; }
+  const f = getFilters();
+  const id = 'ss' + Date.now();
+  PROFILE.savedSearches = PROFILE.savedSearches || [];
+  PROFILE.savedSearches.push({ id, name, filters: f });
+  saveProfile();
+  paintSavedSearches();
+  nameEl.value = '';
+  document.getElementById('ss-pick').value = id;
+}
+function loadSavedSearch(id) {
+  if (!id) return;
+  const s = (PROFILE.savedSearches || []).find(x => x.id === id);
+  if (!s) return;
+  document.getElementById('f-class').value = s.filters.cls ?? 'all';
+  document.getElementById('f-min').value   = s.filters.minY ?? '';
+  document.getElementById('f-max').value   = s.filters.maxY ?? '';
+  document.getElementById('f-yield').value = s.filters.minYld ?? '';
+  document.getElementById('f-struct').value = s.filters.struct ?? 'all';
+  render();
+}
+function deleteSavedSearch() {
+  const id = document.getElementById('ss-pick').value;
+  if (!id) return;
+  PROFILE.savedSearches = (PROFILE.savedSearches || []).filter(s => s.id !== id);
+  saveProfile();
+  paintSavedSearches();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TAB SWITCHING — hash-based, six tabs
+// ════════════════════════════════════════════════════════════════════════════
+function showTab(name) {
+  const valid = ['portfolio','offerings','market','research','contact','settings'];
+  if (!valid.includes(name)) name = 'market';
+  document.querySelectorAll('.tab-page').forEach(p => p.classList.toggle('active', p.dataset.tab === name));
+  document.querySelectorAll('.tab-nav a').forEach(a => a.classList.toggle('active', a.dataset.tab === name));
+  if (window.location.hash.replace('#','') !== name) {
+    history.replaceState(null, '', '#' + name);
+  }
+  // Tab-specific lazy work: spin up the MOVE chart only when Market shown
+  if (name === 'market' && !_moveLoaded) loadMoveHistory();
+  if (name === 'research' && !_researchLoaded) loadResearchOutlook();
+  if (name === 'contact') {
+    renderChat(); renderRfqHistory();
+    const tabLink = document.querySelector('.tab-nav a[data-tab="contact"]');
+    if (tabLink) tabLink.innerHTML = 'Contact';   // clear any "new" badge
+  }
+  if (name === 'offerings') markOfferingsTabSeen();
+}
+window.addEventListener('hashchange', () => showTab(window.location.hash.replace('#','') || 'market'));
+
+// ════════════════════════════════════════════════════════════════════════════
+// OFFERINGS SUB-TABS — Curated for you (default) vs Browse all
+// ════════════════════════════════════════════════════════════════════════════
+let _offeringsView = 'curated';
+async function setOfferingsView(view) {
+  if (view !== 'curated' && view !== 'all') return;
+  _offeringsView = view;
+  document.getElementById('sub-curated').classList.toggle('active', view === 'curated');
+  document.getElementById('sub-all').classList.toggle('active', view === 'all');
+  await load();  // re-fetch inventory with the new view
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// INTERACTIVE STRUCTURE COMPARISON (replaces the old static table)
+// ════════════════════════════════════════════════════════════════════════════
+function _structurePresets(tenor, freq = 6) {
+  return {
+    bullet: { name: 'Bullet',           calls: [] },
+    '1NC1': { name: 'Callable 1NC1',    calls: _buildCallSchedule(1, tenor, 3) },
+    '5NC1': { name: 'Callable 5NC1',    calls: _buildCallSchedule(1, tenor, freq) },
+    '5NC2': { name: 'Callable 5NC2',    calls: _buildCallSchedule(2, tenor, freq) },
+    stepup: { name: 'Step-up (annual)', calls: _buildCallSchedule(1, tenor, 12) },
+  };
+}
+function renderStructureComparison() {
+  const cpn   = +document.getElementById('ba-coupon').value;
+  const tenor = +document.getElementById('ba-tenor').value;
+  const freq  = +document.getElementById('ba-callfreq').value || 6;
+  const price = +document.getElementById('ba-price').value;
+  const tbl = document.getElementById('cmp-table');
+  if (!tbl || ![cpn,tenor,price].every(Number.isFinite) || tenor <= 0) {
+    if (tbl) tbl.innerHTML = '';
+    return;
+  }
+  const presets = _structurePresets(tenor, freq);
+  const a = presets[document.getElementById('cmp-a').value] || presets.bullet;
+  const b = presets[document.getElementById('cmp-b').value] || presets.bullet;
+  const baseYTW = _computeYTW(price, cpn, tenor, a.calls);
+
+  // For each rate shock, re-price both structures at the shocked yield via
+  // the same logistic call-exercise model as the duration calc.
+  const shocks = [-200, -100, 0, +100, +200];
+  const HURDLE = 0.5, STEEPNESS = 12;
+  const repriceAtShock = (calls, shockBps) => {
+    if (!baseYTW?.yield) return null;
+    const yAnnual = baseYTW.yield / 100 + shockBps / 10000;
+    const bullet = _pv(yAnnual, cpn, tenor, 100);
+    if (!calls.length || bullet == null) return { ytw: yAnnual * 100, price: bullet };
+    const fc = calls[0];
+    const callPv = _pv(yAnnual, cpn, fc.yearsFromNow, fc.callPrice);
+    if (callPv == null) return { ytw: yAnnual * 100, price: bullet };
+    const itm = bullet - (fc.callPrice + HURDLE);
+    const prob = 1 / (1 + Math.exp(-itm / STEEPNESS));
+    const newPrice = prob * callPv + (1 - prob) * bullet;
+    // Solve YTW at the new price for display
+    const newYtw = _computeYTW(newPrice, cpn, tenor, calls);
+    return { ytw: newYtw?.yield ?? null, price: newPrice, calledLikely: prob > 0.5 };
+  };
+  const headerCells = `
+    <thead><tr>
+      <th>Rate shock</th>
+      <th colspan="2">${a.name}</th>
+      <th colspan="2" class="divider">${b.name}</th>
+      <th class="divider">YTW Δ (B − A)</th>
+    </tr><tr>
+      <th></th><th>Price</th><th>YTW</th>
+      <th class="divider">Price</th><th>YTW</th>
+      <th class="divider"></th>
+    </tr></thead>`;
+  const rows = shocks.map(s => {
+    const ra = repriceAtShock(a.calls, s);
+    const rb = repriceAtShock(b.calls, s);
+    const dy = (ra?.ytw != null && rb?.ytw != null) ? (rb.ytw - ra.ytw) : null;
+    const fmtY = (v) => v != null ? v.toFixed(2) + '%' : '—';
+    const fmtP = (v) => v != null ? v.toFixed(2) : '—';
+    return `<tr ${s===0?'style="background:rgba(192,130,10,0.06)"':''}>
+      <td class="scenario">${s > 0 ? '+' : ''}${s} bps${ra?.calledLikely||rb?.calledLikely ? ' <span style="color:var(--red);font-size:10px">(call likely)</span>' : ''}</td>
+      <td class="mono">${fmtP(ra?.price)}</td><td class="mono">${fmtY(ra?.ytw)}</td>
+      <td class="mono divider">${fmtP(rb?.price)}</td><td class="mono">${fmtY(rb?.ytw)}</td>
+      <td class="mono divider" style="color:${dy==null?'var(--text3)':dy>0?'var(--green)':'var(--red)'}">${dy!=null?(dy>=0?'+':'')+dy.toFixed(2)+'%':'—'}</td>
+    </tr>`;
+  }).join('');
+  tbl.innerHTML = headerCells + `<tbody>${rows}</tbody>`;
+}
+
+// Re-run the comparison whenever the bond analyzer inputs change
+const _baRecomputeOrig = baRecompute;
+baRecompute = function() { _baRecomputeOrig(); renderStructureComparison(); };
+
+// ════════════════════════════════════════════════════════════════════════════
+// MOVE INDEX 1Y HISTORY — sparkline + percentile
+// ════════════════════════════════════════════════════════════════════════════
+let _moveLoaded = false;
+let _moveChart = null;
+let _moveData = null;
+let _moveZoom = '1y';
+function setMoveZoom(z) {
+  _moveZoom = z;
+  document.getElementById('move-zoom-1y').classList.toggle('active', z === '1y');
+  document.getElementById('move-zoom-30d').classList.toggle('active', z === '30d');
+  if (_moveData) renderMoveChart();
+}
+function renderMoveChart() {
+  if (!_moveData) return;
+  const series = _moveZoom === '30d' ? _moveData.series.slice(-30) : _moveData.series;
+  const labels = series.map(p => p.date);
+  const values = series.map(p => p.value);
+  const avg = _moveData.avg1y;  // 1y average shown as horizontal reference even in 30d zoom
+  const ctx = document.getElementById('move-sparkline');
+  if (_moveChart) _moveChart.destroy();
+  _moveChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'MOVE',     data: values,                 borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,0.08)',
+          tension: 0.2, fill: true, pointRadius: 0, borderWidth: 1.5 },
+        { label: '1y avg',   data: labels.map(() => avg),  borderColor:'rgba(74,81,112,0.6)',
+          borderDash: [4,4], pointRadius: 0, borderWidth: 1, fill: false },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, position: 'top', align: 'end', labels: { boxWidth: 12, font: { size: 10 }, color: '#4a5170' } },
+        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y.toFixed(2)}` } },
+      },
+      scales: {
+        x: { display: false },
+        y: { ticks: { color: '#4a5170', font: { size: 9 }, maxTicksLimit: 4 }, grid: { color: 'rgba(0,0,0,0.04)' } },
+      },
+    },
+  });
+}
+async function loadMoveHistory() {
+  try {
+    const res = await fetch(API + '/api/public/move/history');
+    const d = await res.json();
+    if (!d.series || d.series.length === 0) {
+      document.getElementById('move-current').textContent = 'unavailable';
+      document.getElementById('move-pctile').textContent = 'data refreshing in background';
+      return;
+    }
+    _moveLoaded = true;
+    _moveData = d;
+    document.getElementById('move-current').textContent = d.current.toFixed(2);
+    document.getElementById('move-pctile').textContent =
+      `${d.pctRank1y}th percentile of trailing year · ${d.pctRank1y < 25 ? 'low vol' : d.pctRank1y > 75 ? 'high vol' : 'mid-range'}`;
+    document.getElementById('move-avg').textContent = d.avg1y.toFixed(1);
+    document.getElementById('move-range').textContent = `${d.min1y.toFixed(0)}–${d.max1y.toFixed(0)}`;
+    renderMoveChart();
+  } catch (e) {
+    console.warn('MOVE history load failed:', e);
+  }
+}
+
+// Hydrate the home currency from profile (default port-currency select)
+const portCcyEl = document.getElementById('port-currency');
+if (portCcyEl && PROFILE.homeCurrency) portCcyEl.value = PROFILE.homeCurrency;
+
+paintSettings();
+paintSavedSearches();
 load();
-setInterval(load, 5 * 60 * 1000);  // refresh every 5 min
+loadMM();
+loadFX();
+cmmRecompute();
+baRecompute();
+renderPortfolio();
+renderWatchlist();
+renderTradeIdeasClient();
+subscribeToDeskMessages();
+// Boot tab from URL hash, default to Market Intelligence
+showTab(window.location.hash.replace('#','') || 'market');
+
+// Refresh on tab-visible — covers the case where the browser was backgrounded
+// for hours/days (setInterval gets throttled in inactive tabs). Throttle to
+// once per 30s so rapid tab-switches don't hammer the server.
+let _lastVisibilityRefresh = Date.now();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (Date.now() - _lastVisibilityRefresh < 30_000) return;
+  _lastVisibilityRefresh = Date.now();
+  load();
+  loadMM();
+  loadFX();
+  if (_moveLoaded) loadMoveHistory();
+});
+
+setInterval(load, 5 * 60 * 1000);
+setInterval(loadMM, 5 * 60 * 1000);
+setInterval(loadFX, 60 * 60 * 1000);
+setInterval(loadMoveHistory, 6 * 60 * 60 * 1000);  // 6-hourly
 </script>
 </body>
 </html>

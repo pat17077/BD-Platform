@@ -1,0 +1,1702 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agency Desk — manual auction entry</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root { color-scheme: light dark; --fg:#222; --bg:#fafafa; --muted:#888; --border:#ddd; --accent:#0a66c2; --good:#1a7a3e; --warn:#b58400; --bad:#b13a3a; }
+  body { font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; color: var(--fg); background: var(--bg); }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--border); background: #fff; display: flex; justify-content: space-between; align-items: center; }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  .banner { background: #fff3cd; color: #856404; padding: 8px 20px; font-size: 12px; border-bottom: 1px solid #f0d674; }
+  .wrap { display: grid; grid-template-columns: 1fr 320px; gap: 24px; padding: 20px; max-width: 1200px; margin: 0 auto; }
+  .card { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  label.span2 { grid-column: 1 / span 2; }
+  input, select, textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--fg); }
+  textarea { min-height: 60px; resize: vertical; }
+  button { font: inherit; padding: 8px 14px; border: none; border-radius: 4px; background: var(--accent); color: white; cursor: pointer; }
+  button.secondary { background: #f0f0f0; color: var(--fg); border: 1px solid var(--border); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .row { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
+  .row .spacer { flex: 1; }
+  .sentiment { display: flex; gap: 4px; }
+  .sentiment label { background: #fff; border: 1px solid var(--border); border-radius: 4px; padding: 6px 10px; cursor: pointer; flex-direction: row; align-items: center; gap: 6px; font-size: 13px; color: var(--fg); }
+  .sentiment label input { display: none; }
+  .sentiment label.green-active { background: #e6f4ea; border-color: var(--good); color: var(--good); }
+  .sentiment label.yellow-active { background: #fef7e0; border-color: var(--warn); color: var(--warn); }
+  .sentiment label.red-active { background: #fce8e8; border-color: var(--bad); color: var(--bad); }
+  .preview { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; background: #f5f5f5; padding: 10px; border-radius: 4px; white-space: pre-wrap; margin-top: 10px; max-height: 260px; overflow-y: auto; }
+  .recent table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .recent td, .recent th { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--border); }
+  .stat { display: flex; justify-content: space-between; padding: 4px 0; }
+  .stat .v { font-weight: 600; }
+  .login { max-width: 320px; margin: 80px auto; }
+  .err { color: var(--bad); font-size: 12px; margin-top: 8px; }
+  .ok  { color: var(--good); font-size: 12px; margin-top: 8px; }
+  small.help { color: var(--muted); font-size: 11px; font-weight: normal; text-transform: none; letter-spacing: 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Agency Desk — manual auction entry</h1>
+  <div>
+    <span id="who" style="color:var(--muted); font-size:12px;"></span>
+    <a id="sheetLink" href="#" target="_blank" rel="noopener" style="display:none; margin-left:10px; font-size:12px;">Open Spreadsheet ↗</a>
+    <button class="secondary" id="logoutBtn" style="display:none; margin-left:10px;">Logout</button>
+  </div>
+</header>
+<div class="banner">INTERNAL USE ONLY — NOT FOR CLIENT DISPLAY</div>
+
+<div id="loginView" class="login card" style="display:none;">
+  <h2>Sign in</h2>
+  <label>Username <input id="user" autocomplete="username" /></label>
+  <label style="margin-top:10px;">Password <input id="pass" type="password" autocomplete="current-password" /></label>
+  <div class="row"><button id="loginBtn">Sign in</button></div>
+  <div id="loginErr" class="err"></div>
+</div>
+
+<div id="mainView" class="wrap" style="display:none;">
+
+  <!-- Live market snapshot (full-width, pinned at top) -->
+  <div class="card" id="snapshotCard" style="grid-column: 1 / -1;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <h2 style="margin:0;">Live Market Snapshot <span id="snapDateLabel" style="text-transform:none; letter-spacing:0; color:var(--fg); font-weight:600; margin-left:6px;"></span></h2>
+      <span id="snapStatus" style="font-size:11px; color:var(--muted);"></span>
+    </div>
+    <small class="help">Fill anything you have a live read on — overrides yesterday's FRED close for predictions and the manual entry form. Auto-saves on blur.</small>
+    <div class="grid" id="snapGrid" style="margin-top:10px; grid-template-columns: repeat(11, minmax(0, 1fr)); gap:8px;">
+      <label>UST 2y<input class="snapField" data-field="ust_2y" type="number" step="any" /></label>
+      <label>UST 3y<input class="snapField" data-field="ust_3y" type="number" step="any" /></label>
+      <label>UST 5y<input class="snapField" data-field="ust_5y" type="number" step="any" /></label>
+      <label>UST 7y<input class="snapField" data-field="ust_7y" type="number" step="any" /></label>
+      <label>UST 10y<input class="snapField" data-field="ust_10y" type="number" step="any" /></label>
+      <label>UST 20y<input class="snapField" data-field="ust_20y" type="number" step="any" /></label>
+      <label>UST 30y<input class="snapField" data-field="ust_30y" type="number" step="any" /></label>
+      <label>SOFR O/N<input class="snapField" data-field="sofr_overnight" type="number" step="any" /></label>
+      <label>s5s30s<input class="snapField" data-field="s5s30s" type="number" step="any" /></label>
+      <label>MOVE<input class="snapField" data-field="move" type="number" step="any" /></label>
+      <label>Notes<input class="snapField" data-field="notes" type="text" placeholder="optional context" /></label>
+    </div>
+  </div>
+
+  <!-- Morning Indications (spans full width above the 2-col form) -->
+  <div class="card" id="indicationsCard" style="grid-column: 1 / -1;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <h2 style="margin:0;">Morning Indications <span id="indDateLabel" style="text-transform:none; letter-spacing:0; color:var(--fg); font-weight:600; margin-left:6px;"></span></h2>
+      <button class="secondary" id="indRefreshDayBtn" title="Archive all open indications and start fresh">Refresh for new day</button>
+    </div>
+    <small class="help">Plug in structures the morning of an auction — get a coupon range, implied spread, and predicted funding spread, with the model's reasoning shown.</small>
+
+    <div class="grid" style="margin-top:12px; grid-template-columns: 80px 110px 110px 50px 70px 80px 90px 80px 80px auto;">
+      <label>Issuer<select id="indIssuer"><option value="FHLB">FHLB</option><option value="FFCB">FFCB</option></select></label>
+      <label>Structure<input id="indStructure" placeholder="20yr/1yr" /></label>
+      <label>Settle date<input id="indSettle" type="text" placeholder="5/21 or 5/21/26" /></label>
+      <label>YEL<select id="indYel"><option value="">No</option><option value="Y">Yes</option></select></label>
+      <label>Size MM<input id="indSize" type="number" step="any" placeholder="25" /></label>
+      <label>Fees (opt)<input id="indFees" type="number" step="any" placeholder="auto" /></label>
+      <label>Target fund (opt)<input id="indTargetFund" type="number" step="any" placeholder="auto" /></label>
+      <label>Your cpn<input id="indUserPred" type="number" step="any" placeholder="opt" title="Your gut prediction" /></label>
+      <label>Conf<select id="indUserConf"><option value="">—</option><option value="low">low</option><option value="med">med</option><option value="high">high</option></select></label>
+      <div style="display:flex; align-items:flex-end; gap:6px;">
+        <button id="indPreviewBtn">Preview</button>
+        <button id="indSaveBtn" class="secondary">Save</button>
+      </div>
+    </div>
+    <div id="indErr" class="err"></div>
+    <div id="indPreview" style="display:none; margin-top:10px;"></div>
+
+    <div id="indList" style="margin-top:18px;"></div>
+  </div>
+
+  <!-- Pending / Awaiting Results (full-width, between Indications and the manual entry form) -->
+  <div class="card" id="pendingCard" style="grid-column: 1 / -1;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+      <h2 style="margin:0;">Pending auctions <span id="pendingDateLabel" style="text-transform:none; letter-spacing:0; color:var(--fg); font-weight:600; margin-left:6px;"></span></h2>
+      <div style="display:flex; gap:6px;">
+        <button class="secondary" id="refreshPendingBtn" style="padding:4px 10px; font-size:12px;" title="Re-pull FHLB CBA tentatives">Refresh tentatives</button>
+        <button class="secondary" id="pullResultsBtn" style="padding:4px 10px; font-size:12px;" title="Pull today's auction results from FHLB CBR + FFCB feed; auto-matches indications. Takes ~3 min.">Pull results</button>
+        <button class="secondary" id="addPendingToggleBtn" style="padding:4px 10px; font-size:12px;">+ Add tentative</button>
+      </div>
+    </div>
+    <small class="help">FHLB auto-populated from CBA at 9:45 ET. Add FFCB tentatives manually. Click "Enter result ↓" on any row to capture the actual print.</small>
+    <div id="pullResultsStatus" style="margin-top:4px; font-size:11px; color:var(--muted);"></div>
+    <div id="awaitingList" style="font-size:12px; margin-top:10px;"></div>
+    <div id="pendingList" style="font-size:13px; margin-top:6px;">
+      <em style="color:var(--muted);">none yet</em>
+    </div>
+    <div id="addPendingForm" style="display:none; margin-top:14px; padding-top:10px; border-top:1px solid var(--border);">
+      <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; font-size:12px;">
+        <label>Issuer
+          <select id="pend_issuer">
+            <option value="FFCB">FFCB</option>
+            <option value="FHLB">FHLB</option>
+          </select>
+        </label>
+        <label>Structure <input id="pend_structure" placeholder="5yr/1yr" /></label>
+        <label>Trade date <input id="pend_trade" type="text" placeholder="5/15/26" /></label>
+        <label>Settle date <input id="pend_settle" type="text" placeholder="5/22/26" /></label>
+        <label>Par (MM) <input id="pend_par" type="number" step="any" /></label>
+        <label>Benchmark <input id="pend_bench" placeholder="5Y Tsy" /></label>
+        <label>Announce time (ET) <input id="pend_time" type="text" placeholder="11:00" /></label>
+        <label>Coupon (if known) <input id="pend_coupon" type="number" step="any" placeholder="—" /></label>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <button id="savePendingBtn" style="padding:6px 14px;">Save tentative</button>
+        <span class="spacer"></span>
+        <span id="pendStatus" style="font-size:12px; color:var(--muted);"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- LEFT: form -->
+  <div>
+    <div class="card">
+      <h2>Auction</h2>
+      <div class="grid">
+        <label>Issuer
+          <select id="issuer">
+            <option value="FHLB">FHLB</option>
+            <option value="FFCB">FFCB</option>
+          </select>
+        </label>
+        <label>CUSIP <small class="help">(optional — placeholder created if blank)</small>
+          <input id="cusip" placeholder="3130BAQ42" />
+        </label>
+
+        <label>Trade date <input id="trade_date" type="date" /></label>
+        <label>Settle date <input id="settle_date" type="date" /></label>
+
+        <label>Structure
+          <input id="structure" placeholder="10yr/6mo" />
+        </label>
+        <label>Coupon (%) <input id="coupon" type="number" step="0.001" /></label>
+
+        <label>Par (MM) <input id="size_mm" type="number" step="1" /></label>
+        <label>Fees (bp/bond)
+          <input id="fees_bp" type="number" step="0.1" />
+          <small class="help"><input type="checkbox" id="dnt" style="margin-right:4px;">Did Not Trade</small>
+        </label>
+
+        <label class="span2">Notes
+          <textarea id="desk_notes" placeholder="CPI prints tomorrow; dealer axed long 10y; competing FHLMC priced earlier; etc."></textarea>
+        </label>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Market context</h2>
+      <div class="row" style="margin:0 0 10px;">
+        <span style="font-size:12px; color:var(--muted);">Market sentiment:</span>
+        <div class="sentiment" id="sentiment">
+          <label class="s-opt" data-color="green-active"><input type="radio" name="sent" value="green"> 🟢 Green</label>
+          <label class="s-opt" data-color="yellow-active"><input type="radio" name="sent" value="yellow"> 🟡 Yellow</label>
+          <label class="s-opt" data-color="red-active"><input type="radio" name="sent" value="red"> 🔴 Red</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pre-auction Predictions card removed — superseded by Morning Indications
+         (which has 3-tier coupon + speed + comparable signals + market color +
+         "Going to auction" toggle + auto-match). Your-cpn / Confidence are now
+         in the indication form itself. -->
+    <!-- Hidden composite fields some older save paths still reference -->
+    <input id="user_pred"  type="hidden" />
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Your Neo readouts</h2>
+      <div class="grid">
+        <label>Funding <small class="help">format: s/fees, e.g. 17.4/30</small>
+          <input id="funding" placeholder="17.4/30" />
+        </label>
+        <label>Spread <small class="help">e.g. 65/10yr or 73/20yr 130/10yr</small>
+          <input id="spread" placeholder="65/10yr" />
+        </label>
+        <label>OAS @ par <input id="oas_par" type="number" step="0.1" placeholder="-14" /></label>
+        <label>OAS @ cost <input id="oas_cost" type="number" step="0.1" placeholder="-1" /></label>
+      </div>
+      <div style="font-size:11px; color:var(--muted); margin-top:8px;">
+        Our model output appears below after Preview so you can compare.
+      </div>
+      <div class="grid" style="margin-top:8px;">
+        <label>Model funding <input id="model_funding_shown" readonly placeholder="—" style="background:#f5f5f5;" /></label>
+        <label>Gap (yours − model) <input id="funding_gap_shown" readonly placeholder="—" style="background:#f5f5f5;" /></label>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>YEL</h2>
+      <div class="row" style="margin:0;">
+        <label style="flex-direction:row; align-items:center; gap:6px;">
+          <input type="checkbox" id="yel_y" /> <span>This auction is YEL</span>
+        </label>
+        <span class="spacer"></span>
+        <label id="yelDateWrap" style="display:none; flex-direction:row; align-items:center; gap:6px;">
+          <span>Effective call date:</span>
+          <input id="yel_effective_date" type="date" style="width:160px;" />
+        </label>
+      </div>
+      <div style="font-size:11px; color:var(--muted); margin-top:6px;">
+        YEL = Yield-to-Effective-Life. Coupon set assuming call at effective date; higher coupon / lower fees vs non-YEL.
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Auction execution</h2>
+      <div class="grid">
+        <label># dealers bid <small class="help">from Neo cover page</small>
+          <input id="dealers_count" type="number" step="1" placeholder="8" />
+        </label>
+        <label>Pre-pricing IOI? <small class="help">customer reverse / dealer color</small>
+          <select id="pre_ioi">
+            <option value="">(no data)</option>
+            <option value="Y">Yes</option>
+            <option value="N">No</option>
+          </select>
+        </label>
+        <label># competing prints today <small class="help">other agency / corp same day</small>
+          <input id="competing_prints" type="number" step="1" />
+        </label>
+        <label>Ann → bid close (min) <small class="help">fast = strong demand</small>
+          <input id="ann_to_pricing_minutes" type="number" step="1" />
+        </label>
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="secondary" id="previewBtn">Compute &amp; preview</button>
+      <button id="saveBtn" disabled>Save to sheet</button>
+      <span class="spacer"></span>
+      <span id="status" style="font-size:12px; color:var(--muted);"></span>
+    </div>
+    <div id="previewOut" class="preview" style="display:none;"></div>
+    <div id="err" class="err"></div>
+    <div id="ok"  class="ok"></div>
+  </div>
+
+  <!-- RIGHT: sidebar -->
+  <div>
+    <div class="card recent">
+      <h2>Recent same-tenor prints <small class="help">(last 14d)</small></h2>
+      <div id="recentStats">
+        <div class="stat"><span>Count</span><span class="v" id="rcCount">—</span></div>
+        <div class="stat"><span>Avg funding spread</span><span class="v" id="rcAvgFund">—</span></div>
+        <div class="stat"><span>Avg fees</span><span class="v" id="rcAvgFees">—</span></div>
+        <div class="stat"><span>Trend (oldest → newest)</span><span class="v" id="rcTrend">—</span></div>
+      </div>
+      <table id="rcSample" style="margin-top:8px; display:none;">
+        <thead><tr><th>Pricing</th><th>CUSIP</th><th>Fees</th><th>Funding</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Open drafts <small class="help">(today)</small></h2>
+      <div id="draftsList" style="font-size:12px;">
+        <em style="color:var(--muted);">none yet</em>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button class="secondary" id="refreshDraftsBtn" style="padding:4px 8px; font-size:12px;">Refresh</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Reconcile placeholders</h2>
+      <p style="font-size:12px; color:var(--muted); margin:0 0 10px;">If you entered a row without a CUSIP, click after the daily CBR ingest to auto-match.</p>
+      <button class="secondary" id="reconcileBtn">Run reconcile</button>
+      <div id="reconcileOut" style="font-size:12px; color:var(--muted); margin-top:8px;"></div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Bulk fix pricing dates</h2>
+      <p style="font-size:12px; color:var(--muted); margin:0 0 8px;">
+        Paste <code>CUSIP,YYYY-MM-DD</code> per line. Updates pricing_date and recomputes <code>move</code>.
+        Run <code>/ingest/run</code> after if you also need OAS/funding refreshed.
+      </p>
+      <textarea id="bulkDates" placeholder="3133EWPS3,2026-05-11&#10;3133EWPM6,2026-05-09" style="width:100%; min-height:120px; font-family:ui-monospace,monospace;"></textarea>
+      <div class="row" style="margin-top:8px;">
+        <button class="secondary" id="bulkDatesBtn">Apply</button>
+        <span class="spacer"></span>
+        <span id="bulkDatesOut" style="font-size:12px; color:var(--muted);"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api/internal/agency';
+
+// ───── Auth ─────
+// Global: any 401/expired-token response from the agency API forces re-login.
+// This catches the case where the server restarts (in-memory sessions wiped)
+// or the 24h session expires while the page is open.
+(function installAuthFailGuard() {
+  const orig = window.fetch.bind(window);
+  let promptingLogin = false;
+  window.fetch = async function patchedFetch(input, init) {
+    const r = await orig(input, init);
+    try {
+      const url = typeof input === 'string' ? input : (input && input.url) || '';
+      if (r.status === 401 && url.includes('/api/internal/agency') && !url.endsWith('/login')) {
+        if (!promptingLogin) {
+          promptingLogin = true;
+          localStorage.removeItem('agencyToken');
+          localStorage.removeItem('agencyUser');
+          if (typeof showLogin === 'function') showLogin();
+          alert('Your session expired (server restart or 24h timeout). Please sign in again.');
+          setTimeout(() => { promptingLogin = false; }, 500);
+        }
+      }
+    } catch (_) {}
+    return r;
+  };
+})();
+
+function getToken() { return localStorage.getItem('agencyToken') || ''; }
+function getUser()  { return localStorage.getItem('agencyUser') || ''; }
+function setSession(t, u) { localStorage.setItem('agencyToken', t); localStorage.setItem('agencyUser', u); }
+function clearSession() { localStorage.removeItem('agencyToken'); localStorage.removeItem('agencyUser'); }
+
+async function checkAuth() {
+  const tok = getToken();
+  if (!tok) return showLogin();
+  const r = await fetch(`${API}/me`, { headers: { Authorization: `Bearer ${tok}` } });
+  if (!r.ok) { clearSession(); return showLogin(); }
+  const me = await r.json().catch(() => ({}));
+  if (me.sheetUrl) {
+    const a = document.getElementById('sheetLink');
+    a.href = me.sheetUrl;
+    a.style.display = 'inline';
+  }
+  showMain();
+}
+function showLogin() {
+  document.getElementById('loginView').style.display = 'block';
+  document.getElementById('mainView').style.display = 'none';
+  document.getElementById('logoutBtn').style.display = 'none';
+  document.getElementById('sheetLink').style.display = 'none';
+}
+function showMain() {
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('mainView').style.display = 'grid';
+  document.getElementById('logoutBtn').style.display = 'inline-block';
+  document.getElementById('who').textContent = 'Signed in as ' + getUser();
+  initForm();
+  initSnapshot();
+  initIndications();
+}
+
+document.getElementById('loginBtn').onclick = async () => {
+  const u = document.getElementById('user').value.trim();
+  const p = document.getElementById('pass').value;
+  const errEl = document.getElementById('loginErr');
+  errEl.textContent = '';
+  try {
+    const r = await fetch(`${API}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: p }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'login failed');
+    setSession(j.token, j.username);
+    showMain();
+  } catch (e) { errEl.textContent = e.message; }
+};
+document.getElementById('logoutBtn').onclick = async () => {
+  try { await fetch(`${API}/logout`, { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` } }); } catch (_) {}
+  clearSession(); showLogin();
+};
+
+// ───── Form ─────
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+function addBizDays(iso, n) {
+  const d = new Date(iso + 'T00:00:00Z'); let added = 0;
+  while (added < n) { d.setUTCDate(d.getUTCDate() + 1); if (d.getUTCDay() !== 0 && d.getUTCDay() !== 6) added++; }
+  return d.toISOString().slice(0, 10);
+}
+function parseStruct(s) {
+  const m = String(s || '').match(/^(\d+)\s*yr\s*\/\s*(\d+)\s*(mo|yr)/i);
+  if (!m) return null;
+  return { tenor: +m[1], callN: +m[2], callUnit: m[3].toLowerCase() };
+}
+
+function initForm() {
+  document.getElementById('trade_date').value = todayISO();
+  document.getElementById('settle_date').value = addBizDays(todayISO(), 10);
+
+  // sentiment radio styling
+  document.querySelectorAll('.s-opt input').forEach((inp) => {
+    inp.onchange = () => {
+      document.querySelectorAll('.s-opt').forEach((l) => { l.classList.remove('green-active', 'yellow-active', 'red-active'); });
+      const lbl = inp.closest('.s-opt');
+      lbl.classList.add(lbl.dataset.color);
+    };
+  });
+
+  // auto-fetch recent when structure changes
+  document.getElementById('structure').addEventListener('input', refreshRecent);
+  document.getElementById('issuer').addEventListener('change', refreshRecent);
+  document.getElementById('trade_date').addEventListener('change', () => {
+    document.getElementById('settle_date').value = addBizDays(document.getElementById('trade_date').value, 10);
+  });
+
+  // YEL toggle shows/hides effective date
+  document.getElementById('yel_y').addEventListener('change', () => {
+    const isY = document.getElementById('yel_y').checked;
+    document.getElementById('yelDateWrap').style.display = isY ? 'flex' : 'none';
+  });
+
+  document.getElementById('previewBtn').onclick = doPreview;
+  document.getElementById('saveBtn').onclick = doSave;
+  document.getElementById('reconcileBtn').onclick = doReconcile;
+  document.getElementById('bulkDatesBtn').onclick = doBulkDates;
+  // Pre-auction predictions card has been removed in favor of Morning Indications.
+  // Guard the legacy wire-ups in case the elements aren't in the DOM anymore.
+  const _opt = (id, h) => { const el = document.getElementById(id); if (el) el.onclick = h; };
+  _opt('predictBtn',      typeof doPredict      === 'function' ? doPredict      : null);
+  _opt('saveDraftBtn',    typeof doSaveDraft    === 'function' ? doSaveDraft    : null);
+  _opt('refreshDraftsBtn',typeof refreshDrafts  === 'function' ? refreshDrafts  : null);
+  document.getElementById('refreshPendingBtn').onclick = refreshPending;
+  document.getElementById('pullResultsBtn').onclick = pullAuctionResults;
+  document.getElementById('addPendingToggleBtn').onclick = () => {
+    const el = document.getElementById('addPendingForm');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    if (el.style.display === 'block') {
+      document.getElementById('pend_trade').value = todayISO();
+      document.getElementById('pend_settle').value = addBizDays(todayISO(), 5);
+    }
+  };
+  document.getElementById('savePendingBtn').onclick = doSavePending;
+  // Date label on the Pending Auctions panel header
+  const pdl = document.getElementById('pendingDateLabel');
+  if (pdl) pdl.textContent = '— ' + _fmtUS(_todayIso());
+  // Period as decimal separator for the add-tentative form
+  ['pend_par', 'pend_coupon'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) _forceDecimalPeriod(el);
+  });
+  // pred_trade_date no longer in the DOM (Pre-auction card removed)
+  const ptd = document.getElementById('pred_trade_date');
+  if (ptd) ptd.value = todayISO();
+  if (typeof refreshDrafts === 'function' && document.getElementById('draftsList')) refreshDrafts();
+  refreshPending();
+}
+
+async function pullAuctionResults() {
+  const btn = document.getElementById('pullResultsBtn');
+  const status = document.getElementById('pullResultsStatus');
+  btn.disabled = true;
+  status.style.color = 'var(--muted)';
+  status.textContent = 'Pulling FHLB CBR + FFCB results… (this takes 3–4 minutes)';
+  try {
+    const r = await fetch(`${API}/ingest/run`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      status.style.color = 'var(--bad)';
+      status.textContent = 'err: ' + (j.error || r.status);
+      return;
+    }
+    const j = await r.json();
+    const ni = j.newIssues || {};
+    const t = new Date();
+    status.style.color = 'var(--good)';
+    status.textContent = `✓ ${t.toLocaleTimeString()} — pulled FHLB=${ni.fhlb||0} FFCB=${ni.ffcb||0}, inserted ${ni.inserted||0}, matched ${ni.indications_matched||0} indication(s)`;
+    refreshPending();
+    if (typeof loadIndications === 'function') loadIndications();
+  } catch (e) {
+    status.style.color = 'var(--bad)';
+    status.textContent = 'err: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function refreshPending() {
+  const list = document.getElementById('pendingList');
+  list.innerHTML = '<em style="color:var(--muted);">fetching from FHLB CBA…</em>';
+  try {
+    // First re-pull from FHLB so any newly-announced auctions land in the tab.
+    // The refresh endpoint also auto-spawns Morning Indications for new tentatives,
+    // so we reload that section as well.
+    await fetch(`${API}/pending/refresh`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getToken()}` },
+    }).catch(() => {});
+    if (typeof loadIndications === 'function') loadIndications();
+    const r = await fetch(`${API}/pending`, { headers: { Authorization: `Bearer ${getToken()}` } });
+    const j = await r.json();
+    // Always clear both panels — we may still need to render Awaiting Results
+    list.innerHTML = '';
+    const awaitingHost = document.getElementById('awaitingList');
+    if (awaitingHost) awaitingHost.innerHTML = '';
+    if (!j.items || !j.items.length) {
+      list.innerHTML = '<em style="color:var(--muted);">none yet</em>';
+      return;
+    }
+    // Build a lookup of (issuer|structure|settle) → existing issue row, so the
+    // result form can pre-fill with whatever data is already on the sheet.
+    const issuesByKey = new Map();
+    try {
+      const issuesResp = await fetch(`${API}/issues?since=2020-01-01`, { headers: { Authorization: `Bearer ${getToken()}` } });
+      const ij = await issuesResp.json();
+      for (const r of ij.items || []) {
+        issuesByKey.set(`${r.issuer}|${r.structure}|${r.settle_date}`, r);
+      }
+    } catch (_) {}
+    // Determine "now" in NY time (ISO-like "YYYY-MM-DDTHH:MM")
+    const nycParts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/New_York',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(new Date());
+    const ny = (t) => nycParts.find(p => p.type === t).value;
+    const nycNowStr = `${ny('year')}-${ny('month')}-${ny('day')}T${(ny('hour')==='24'?'00':ny('hour'))}:${ny('minute')}`;
+    const isPastDue = (p) => {
+      if (!p.bids_due_et || !p.trade_date) return false;
+      const m = String(p.bids_due_et).match(/(\d{1,2}):(\d{2})/);
+      if (!m) return false;
+      const dueStr = `${p.trade_date}T${m[1].padStart(2,'0')}:${m[2]}`;
+      return nycNowStr > dueStr;
+    };
+    const awaitingEl = document.getElementById('awaitingList');
+    if (awaitingEl) awaitingEl.innerHTML = '';
+    // Past-due rows auto-show in Awaiting Results. Pre-due rows stay in
+    // Pending but get an "Enter result" toggle so they can be filled in too.
+    const awaiting = [];
+    const stillPending = [];
+    for (const p of j.items) {
+      if (isPastDue(p)) awaiting.push(p);
+      else stillPending.push(p);
+    }
+    // Render "Awaiting Results"
+    if (awaitingEl) {
+      if (awaiting.length) {
+        awaitingEl.innerHTML = '<div style="font-weight:600; color:var(--warn); margin-bottom:4px;">Awaiting Results — enter actuals</div>';
+        for (const p of awaiting) {
+          const existing = issuesByKey.get(`${p.source}|${p.structure}|${p.settle_date}`) || {};
+          const fv = (v) => (v == null || v === '') ? '' : _esc(v);
+          const yelSel = existing.yel === 'Y' ? 'selected' : '';
+          const yelNoSel = existing.yel === 'Y' ? '' : 'selected';
+          const matchedTag = existing.cusip ? `<span style="color:var(--good); font-size:10px; margin-left:6px;">↻ existing row ${_esc(existing.cusip)}</span>` : '';
+          const div = document.createElement('div');
+          div.style.cssText = 'padding:8px; margin-bottom:6px; background:#fffbeb; border:1px solid #f0d674; border-radius:4px;';
+          const t = p.bids_due_et ? ` · ${p.bids_due_et} ET` : '';
+          div.innerHTML = `
+            <div style="font-weight:600;">${_esc(p.source)} ${_esc(p.structure)} ${matchedTag}</div>
+            <div style="color:var(--muted); font-size:11px;">settle ${_fmtUS(p.settle_date)}${t} · par $${_esc(p.par_mm || '?')}MM</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; font-size:11px; margin-top:6px;">
+              <label>Coupon % *<input class="qr-coupon" type="number" step="any" value="${fv(existing.coupon)}" placeholder="4.94" /></label>
+              <label>Fees (bp)<input class="qr-fees" type="number" step="any" value="${fv(existing.fees)}" placeholder="21" /></label>
+              <label>Size MM<input class="qr-size" type="number" step="any" value="${fv(existing.size || p.par_mm || '')}" /></label>
+              <label>YEL<select class="qr-yel"><option value="" ${yelNoSel}>No</option><option value="Y" ${yelSel}>Yes</option></select></label>
+              <label>Spread<input class="qr-spread" type="text" value="${fv(existing.spread)}" placeholder="66/7yr" /></label>
+              <label>Funding (X/Y)<input class="qr-funding" type="text" value="${fv(existing.funding)}" placeholder="20/15" /></label>
+              <label>OAS par<input class="qr-oas-par" type="number" step="any" value="${fv(existing.oas_par)}" placeholder="-18" /></label>
+              <label>OAS cost<input class="qr-oas-cost" type="number" step="any" value="${fv(existing.oas_cost)}" placeholder="-12" /></label>
+              <label>MOVE<input class="qr-move" type="number" step="any" value="${fv(existing.move)}" placeholder="78" /></label>
+              <label>5s30s<input class="qr-s5s30s" type="number" step="any" value="${fv(existing.s5s30s)}" placeholder="90" /></label>
+            </div>
+            <div style="margin-top:6px; display:flex; gap:6px;">
+              <button class="qr-save" data-dkey="${_esc(p.source)}|${_esc(p.structure)}|${_esc(p.trade_date)}|${_esc(p.settle_date)}" style="font-size:11px; padding:3px 10px;">Save result</button>
+              <span class="qr-status" style="font-size:11px; align-self:center; color:var(--muted);"></span>
+            </div>
+          `;
+          awaitingEl.appendChild(div);
+        }
+        awaitingEl.querySelectorAll('input[type="number"]').forEach((el) => _forceDecimalPeriod(el));
+        _wireQrSave(awaitingEl);
+      }
+    }
+
+    function _wireQrSave(rootEl) {
+      rootEl.querySelectorAll('.qr-save').forEach((btn) => {
+        // Skip if already wired
+        if (btn.dataset.qrWired === '1') return;
+        btn.dataset.qrWired = '1';
+        btn.onclick = async () => {
+          const card = btn.closest('div').parentElement;
+            const [issuer, structure, trade_date, settle_date] = btn.dataset.dkey.split('|');
+            const coupon = card.querySelector('.qr-coupon').value;
+            const fees = card.querySelector('.qr-fees').value;
+            const size_mm = card.querySelector('.qr-size').value;
+            const yel = card.querySelector('.qr-yel').value;
+            const spread = card.querySelector('.qr-spread').value;
+            const funding = card.querySelector('.qr-funding').value;
+            const oas_par = card.querySelector('.qr-oas-par').value;
+            const oas_cost = card.querySelector('.qr-oas-cost').value;
+            const move = card.querySelector('.qr-move').value;
+            const s5s30s = card.querySelector('.qr-s5s30s').value;
+            const status = card.querySelector('.qr-status');
+            if (!coupon) { status.style.color='var(--bad)'; status.textContent='coupon required'; return; }
+            status.style.color='var(--muted)'; status.textContent='saving…';
+            try {
+              const r = await fetch(`${API}/desk/quick-result`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+                body: JSON.stringify({ issuer, structure, trade_date, settle_date, coupon, fees, size_mm, yel, spread, funding, oas_par, oas_cost, move, s5s30s }),
+              });
+              if (!r.ok) {
+                const j = await r.json().catch(() => ({}));
+                status.style.color='var(--bad)'; status.textContent='err: ' + (j.error || r.status);
+                return;
+              }
+              const j = await r.json();
+              status.style.color='var(--good)'; status.textContent=`✓ saved · matched ${j.indications_matched||0} indication(s)`;
+              setTimeout(() => { refreshPending(); if (typeof loadIndications === 'function') loadIndications(); }, 600);
+            } catch (e) { status.style.color='var(--bad)'; status.textContent='err: ' + e.message; }
+          };
+        });
+      }
+    // Render still-pending below
+    if (stillPending.length === 0 && awaiting.length === 0) {
+      list.innerHTML = '<em style="color:var(--muted);">none yet</em>';
+      return;
+    }
+    for (const p of stillPending) {
+      const existing = issuesByKey.get(`${p.source}|${p.structure}|${p.settle_date}`) || {};
+      const fv = (v) => (v == null || v === '') ? '' : _esc(v);
+      const yelSel = existing.yel === 'Y' ? 'selected' : '';
+      const yelNoSel = existing.yel === 'Y' ? '' : 'selected';
+      const matchedTag = existing.cusip ? `<span style="color:var(--good); font-size:10px; margin-left:6px;">↻ existing ${_esc(existing.cusip)}</span>` : '';
+      const div = document.createElement('div');
+      div.style.cssText = 'padding:6px 0; border-bottom:1px solid var(--border);';
+      const t = p.bids_due_et ? ` · ${p.bids_due_et} ET` : '';
+      const cpn = p.coupon ? ` · cpn ${p.coupon}%` : '';
+      const dkey = `${p.source}|${p.structure}|${p.trade_date}|${p.settle_date}`;
+      div.innerHTML = `
+        <div><strong>${p.source} ${p.structure}</strong>${matchedTag}</div>
+        <div style="color:var(--muted); font-size:11px;">trade ${_fmtUS(p.trade_date)}${t} · settle ${_fmtUS(p.settle_date)} · par $${p.par_mm || '?'}MM${cpn}</div>
+        <div style="margin-top:4px; display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="secondary" data-dkey="${dkey}" data-action="edit-pending" style="font-size:10px; padding:2px 6px;">Edit ↓</button>
+          <button class="secondary" data-dkey="${dkey}" data-action="result-pending" style="font-size:10px; padding:2px 6px;">Enter result ↓</button>
+          <button class="secondary" data-dkey="${dkey}" data-action="del-pending" style="font-size:10px; padding:2px 6px; color:var(--bad);" title="Remove this tentative (also removes the auto-spawned indication)">Delete</button>
+        </div>
+        <div class="pend-result" data-dkey="${dkey}" style="display:none; margin-top:8px; padding:8px; background:#fffbeb; border:1px solid #f0d674; border-radius:4px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; font-size:11px;">
+            <label>Coupon % *<input class="qr-coupon" type="number" step="any" value="${fv(existing.coupon)}" placeholder="4.94" /></label>
+            <label>Fees (bp)<input class="qr-fees" type="number" step="any" value="${fv(existing.fees)}" placeholder="21" /></label>
+            <label>Size MM<input class="qr-size" type="number" step="any" value="${fv(existing.size || p.par_mm || '')}" /></label>
+            <label>YEL<select class="qr-yel"><option value="" ${yelNoSel}>No</option><option value="Y" ${yelSel}>Yes</option></select></label>
+            <label>Spread<input class="qr-spread" type="text" value="${fv(existing.spread)}" placeholder="66/7yr" /></label>
+            <label>Funding (X/Y)<input class="qr-funding" type="text" value="${fv(existing.funding)}" placeholder="20/15" /></label>
+            <label>OAS par<input class="qr-oas-par" type="number" step="any" value="${fv(existing.oas_par)}" placeholder="-18" /></label>
+            <label>OAS cost<input class="qr-oas-cost" type="number" step="any" value="${fv(existing.oas_cost)}" placeholder="-12" /></label>
+            <label>MOVE<input class="qr-move" type="number" step="any" value="${fv(existing.move)}" placeholder="78" /></label>
+            <label>5s30s<input class="qr-s5s30s" type="number" step="any" value="${fv(existing.s5s30s)}" placeholder="90" /></label>
+          </div>
+          <div style="margin-top:6px; display:flex; gap:6px;">
+            <button class="qr-save" data-dkey="${dkey}" style="font-size:11px; padding:3px 10px;">Save result</button>
+            <span class="qr-status" style="font-size:11px; align-self:center; color:var(--muted);"></span>
+          </div>
+        </div>
+        <div class="pend-edit" data-dkey="${dkey}" style="display:none; margin-top:8px; padding:8px; background:#f9f9f9; border:1px solid var(--border); border-radius:4px;">
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; font-size:11px;">
+            <label>Structure<input class="pe-struct" type="text" value="${_esc(p.structure)}" /></label>
+            <label>Settle date<input class="pe-settle" type="text" value="${_esc(p.settle_date)}" placeholder="5/21/26" /></label>
+            <label>Trade date<input class="pe-trade" type="text" value="${_esc(p.trade_date)}" placeholder="5/14/26" /></label>
+            <label>Par MM<input class="pe-par" type="number" step="any" value="${_esc(p.par_mm || '')}" /></label>
+            <label>Bids due ET<input class="pe-time" type="text" value="${_esc(p.bids_due_et || '')}" placeholder="10:30" /></label>
+            <label>Coupon%<input class="pe-coupon" type="number" step="any" value="${_esc(p.coupon || '')}" placeholder="optional" /></label>
+          </div>
+          <div style="margin-top:6px; display:flex; gap:6px;">
+            <button class="pe-save" style="font-size:10px; padding:2px 8px;">Save</button>
+            <button class="secondary pe-cancel" style="font-size:10px; padding:2px 8px;">Cancel</button>
+            <span class="pe-status" style="font-size:10px; color:var(--muted); align-self:center;"></span>
+          </div>
+        </div>
+      `;
+      list.appendChild(div);
+    }
+    // Wire delete buttons
+    list.querySelectorAll('button[data-action="del-pending"]').forEach((btn) => {
+      btn.onclick = async () => {
+        const [issuer, structure, trade_date, settle_date] = btn.dataset.dkey.split('|');
+        if (!confirm(`Remove tentative ${issuer} ${structure} (settle ${_fmtUS(settle_date)})? Also removes the auto-spawned indication if any.`)) return;
+        const qs = new URLSearchParams({ issuer, structure, trade_date, settle_date }).toString();
+        try {
+          const r = await fetch(`${API}/pending?${qs}`, { method: 'DELETE', headers: { Authorization: `Bearer ${getToken()}` } });
+          if (!r.ok) { alert('delete failed'); return; }
+          refreshPending();
+          if (typeof loadIndications === 'function') loadIndications();
+        } catch (e) { alert('error: ' + e.message); }
+      };
+    });
+    // Inline edit: toggle the .pend-edit panel for this row
+    list.querySelectorAll('button[data-action="edit-pending"]').forEach((btn) => {
+      btn.onclick = () => {
+        const panel = list.querySelector(`.pend-edit[data-dkey="${btn.dataset.dkey}"]`);
+        if (!panel) return;
+        const visible = panel.style.display !== 'none';
+        list.querySelectorAll('.pend-edit, .pend-result').forEach((p) => { p.style.display = 'none'; });
+        panel.style.display = visible ? 'none' : 'block';
+        if (!visible) panel.querySelectorAll('input[type="number"]').forEach((el) => _forceDecimalPeriod(el));
+      };
+    });
+    // Inline result entry: toggle .pend-result panel for this row
+    list.querySelectorAll('button[data-action="result-pending"]').forEach((btn) => {
+      btn.onclick = () => {
+        const panel = list.querySelector(`.pend-result[data-dkey="${btn.dataset.dkey}"]`);
+        if (!panel) return;
+        const visible = panel.style.display !== 'none';
+        list.querySelectorAll('.pend-edit, .pend-result').forEach((p) => { p.style.display = 'none'; });
+        panel.style.display = visible ? 'none' : 'block';
+        if (!visible) panel.querySelectorAll('input[type="number"]').forEach((el) => _forceDecimalPeriod(el));
+      };
+    });
+    // Wire the qr-save buttons inside still-pending .pend-result panels too.
+    // (Previously these were only wired for the top "Awaiting Results" panel.)
+    _wireQrSave(list);
+    // Cancel: hide the panel
+    list.querySelectorAll('.pe-cancel').forEach((btn) => {
+      btn.onclick = () => { btn.closest('.pend-edit').style.display = 'none'; };
+    });
+    // Save: if PK fields changed (structure/trade_date/settle_date), delete old + add new;
+    // otherwise just upsert via /pending/add.
+    list.querySelectorAll('.pe-save').forEach((btn) => {
+      btn.onclick = async () => {
+        const panel = btn.closest('.pend-edit');
+        const [origIssuer, origStruct, origTrade, origSettle] = panel.dataset.dkey.split('|');
+        const newStruct = panel.querySelector('.pe-struct').value.trim();
+        const newSettleRaw = panel.querySelector('.pe-settle').value.trim();
+        const newTradeRaw  = panel.querySelector('.pe-trade').value.trim();
+        const newSettle = _parseFlexDate(newSettleRaw) || newSettleRaw;
+        const newTrade  = _parseFlexDate(newTradeRaw)  || newTradeRaw;
+        const newPar    = panel.querySelector('.pe-par').value;
+        const newTime   = panel.querySelector('.pe-time').value;
+        const newCoupon = panel.querySelector('.pe-coupon').value;
+        const status = panel.querySelector('.pe-status');
+        if (!newStruct || !newTrade || !newSettle) { status.style.color='var(--bad)'; status.textContent='structure + dates required'; return; }
+        status.style.color='var(--muted)'; status.textContent = 'saving…';
+        try {
+          const pkChanged = (newStruct !== origStruct || newTrade !== origTrade || newSettle !== origSettle);
+          if (pkChanged) {
+            const qs = new URLSearchParams({ issuer: origIssuer, structure: origStruct, trade_date: origTrade, settle_date: origSettle }).toString();
+            await fetch(`${API}/pending?${qs}`, { method: 'DELETE', headers: { Authorization: `Bearer ${getToken()}` } });
+          }
+          const r = await fetch(`${API}/pending/add`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+            body: JSON.stringify({
+              issuer: origIssuer,
+              structure: newStruct,
+              trade_date: newTrade,
+              settle_date: newSettle,
+              par_mm: newPar,
+              bids_due_et: newTime,
+              coupon: newCoupon,
+            }),
+          });
+          if (!r.ok) {
+            const j = await r.json().catch(() => ({}));
+            status.style.color='var(--bad)'; status.textContent = 'err: ' + (j.error || r.status);
+            return;
+          }
+          status.style.color='var(--good)'; status.textContent = '✓ saved';
+          setTimeout(() => { refreshPending(); if (typeof loadIndications === 'function') loadIndications(); }, 400);
+        } catch (e) { status.style.color='var(--bad)'; status.textContent = 'err: ' + e.message; }
+      };
+    });
+  } catch (e) {
+    list.innerHTML = '<em style="color:var(--bad);">err: ' + e.message + '</em>';
+  }
+}
+
+async function doSavePending() {
+  const status = document.getElementById('pendStatus');
+  const issuer    = document.getElementById('pend_issuer').value;
+  const structure = document.getElementById('pend_structure').value.trim();
+  const trade     = document.getElementById('pend_trade').value;
+  const settleRaw = document.getElementById('pend_settle').value;
+  const tradeIso  = _parseFlexDate(trade) || trade;
+  const settleIso = _parseFlexDate(settleRaw) || settleRaw;
+  const par       = document.getElementById('pend_par').value;
+  const bench     = document.getElementById('pend_bench').value;
+  const time      = document.getElementById('pend_time').value;
+  const coupon    = document.getElementById('pend_coupon').value;
+  if (!structure || !tradeIso || !settleIso) { status.textContent = 'structure + dates required'; return; }
+  status.textContent = 'saving…';
+  try {
+    const r = await fetch(`${API}/pending/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({
+        issuer, structure, trade_date: tradeIso, settle_date: settleIso,
+        par_mm: par, benchmark_desc: bench,
+        bids_due_et: time,
+        coupon: coupon || undefined,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'add failed');
+    status.textContent = '✓ added';
+    document.getElementById('pend_structure').value = '';
+    document.getElementById('pend_par').value = '';
+    document.getElementById('pend_bench').value = '';
+    document.getElementById('pend_time').value = '';
+    document.getElementById('pend_coupon').value = '';
+    refreshPending();
+    if (typeof loadIndications === 'function') loadIndications();
+  } catch (e) {
+    status.textContent = 'err: ' + e.message;
+  }
+}
+
+// Normalize an FHLB CBA structure ("10 Yr nc 6 Mo (A)") or short form ("10yr/6mo") to "10yr/6mo".
+function normalizeStructure(s) {
+  if (!s) return '';
+  const long = String(s).match(/^(\d+)\s*Yr\s*nc\s*(\d+)\s*(Mo|Yr)/i);
+  if (long) {
+    const tenor = long[1];
+    const callN = long[2];
+    const unit = long[3].toLowerCase();
+    return `${tenor}yr/${callN}${unit}`;
+  }
+  return s.toLowerCase().replace(/\s+/g, '');
+}
+
+// Look up an already-saved issue row matching the pending auction.
+async function findMatchingIssue(issuer, structure, trade_date, settle_date) {
+  const r = await fetch(`${API}/issues?issuer=${issuer}&since=${trade_date}`, { headers: { Authorization: `Bearer ${getToken()}` } });
+  const j = await r.json();
+  const wantStruct = normalizeStructure(structure);
+  return (j.items || []).find((it) =>
+    it.issuer === issuer &&
+    it.pricing_date === trade_date &&
+    normalizeStructure(it.structure || '') === wantStruct &&
+    it.settle_date === settle_date
+  );
+}
+
+async function doPredict() {
+  const issuer = document.getElementById('pred_issuer').value;
+  const structure = document.getElementById('pred_structure').value.trim();
+  const tradeDate = document.getElementById('pred_trade_date').value;
+  const yel = document.getElementById('pred_yel').checked ? 'Y' : '';
+  const cpnEl = document.getElementById('model_coupon_shown');
+  const feeEl = document.getElementById('model_fees_shown');
+  const ctx = document.getElementById('pred_context');
+  if (!structure) { ctx.textContent = 'enter a structure first'; return; }
+  cpnEl.value = '…'; feeEl.value = '…';
+  try {
+    const r = await fetch(`${API}/desk/predict`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ issuer, structure, trade_date: tradeDate, yel }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'predict failed');
+    cpnEl.value = j.predicted_coupon_pct != null ? j.predicted_coupon_pct.toFixed(3) + '%' : '—';
+    feeEl.value = j.predicted_fees_bp    != null ? j.predicted_fees_bp + ' bp'           : '—';
+    document.getElementById('model_pred').value = (j.predicted_coupon_pct != null && j.predicted_fees_bp != null)
+      ? `${j.predicted_coupon_pct}/${j.predicted_fees_bp}` : '';
+    const rc = j.recent_context;
+    const bits = [];
+    if (rc.count > 0) bits.push(`${rc.count} recent prints`);
+    if (j.current_ust_yield != null) bits.push(`UST ${j.current_ust_yield}%`);
+    if (rc.avg_funding_bp != null) bits.push(`avg funding ${rc.avg_funding_bp}bp`);
+    if (rc.trend_bp != null) bits.push(`trend ${rc.trend_bp >= 0 ? '+' : ''}${rc.trend_bp}bp`);
+    if (j.note) bits.push(j.note);
+    ctx.textContent = bits.join(' · ') || 'no context';
+  } catch (e) {
+    cpnEl.value = ''; feeEl.value = '';
+    ctx.textContent = 'err: ' + e.message;
+  }
+}
+
+async function doSaveDraft() {
+  const issuer = document.getElementById('pred_issuer').value;
+  const structure = document.getElementById('pred_structure').value.trim();
+  const tradeDate = document.getElementById('pred_trade_date').value;
+  const yel = document.getElementById('pred_yel').checked ? 'Y' : '';
+  const modelPred = document.getElementById('model_pred').value;
+  const userCpn = document.getElementById('user_coupon').value;
+  const userFee = document.getElementById('user_fees').value;
+  const userPred = (userCpn && userFee) ? `${userCpn}/${userFee}` : '';
+  document.getElementById('user_pred').value = userPred;
+  const userConf = document.getElementById('user_confidence').value;
+  const notes    = document.getElementById('pred_notes').value;
+  const status   = document.getElementById('draftStatus');
+  if (!structure) { status.textContent = 'structure required'; return; }
+  status.textContent = 'saving…';
+  try {
+    const r = await fetch(`${API}/predictions/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({
+        issuer, structure, trade_date: tradeDate, yel,
+        model_pred: modelPred, user_pred: userPred,
+        user_confidence: userConf, notes,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'save draft failed');
+    status.textContent = `✓ saved ${j.draft_id.slice(-12)}`;
+    refreshDrafts();
+  } catch (e) {
+    status.textContent = 'err: ' + e.message;
+  }
+}
+
+async function refreshDrafts() {
+  const list = document.getElementById('draftsList');
+  try {
+    const r = await fetch(`${API}/predictions/drafts?status=open`, { headers: { Authorization: `Bearer ${getToken()}` } });
+    const j = await r.json();
+    if (!j.items || !j.items.length) {
+      list.innerHTML = '<em style="color:var(--muted);">none yet</em>';
+      return;
+    }
+    list.innerHTML = '';
+    for (const d of j.items) {
+      const div = document.createElement('div');
+      div.style.cssText = 'padding:6px 0; border-bottom:1px solid var(--border);';
+      const yelBadge = d.yel === 'Y' ? ' <span style="background:#5b2c87; color:#fff; padding:1px 5px; border-radius:3px; font-size:10px;">YEL</span>' : '';
+      const fmt = (p) => {
+        if (!p) return '—';
+        const [c, f] = String(p).split('/');
+        return `${c ? c + '%' : '—'} · ${f ? f + 'bp' : '—'}`;
+      };
+      div.innerHTML = `
+        <div><strong>${d.issuer} ${d.structure}</strong>${yelBadge}</div>
+        <div style="color:var(--muted); font-size:11px;">trade ${d.trade_date}</div>
+        <div style="font-size:11px;">model: <code>${fmt(d.model_pred)}</code></div>
+        <div style="font-size:11px;">yours: <code>${fmt(d.user_pred)}</code> ${d.user_confidence ? `(${d.user_confidence})` : ''}</div>
+        <div style="margin-top:4px;">
+          <button class="secondary" data-draft="${d.draft_id}" data-action="use" style="font-size:10px; padding:2px 6px;">Use ↓</button>
+          <button class="secondary" data-draft="${d.draft_id}" data-action="discard" style="font-size:10px; padding:2px 6px;">Discard</button>
+        </div>
+      `;
+      list.appendChild(div);
+    }
+    list.querySelectorAll('button[data-action="use"]').forEach((btn) => {
+      btn.onclick = () => useDraft(btn.dataset.draft);
+    });
+    list.querySelectorAll('button[data-action="discard"]').forEach((btn) => {
+      btn.onclick = () => discardDraft(btn.dataset.draft);
+    });
+  } catch (e) {
+    list.innerHTML = '<em style="color:var(--bad);">err: ' + e.message + '</em>';
+  }
+}
+
+async function useDraft(draftId) {
+  const r = await fetch(`${API}/predictions/drafts?status=open`, { headers: { Authorization: `Bearer ${getToken()}` } });
+  const j = await r.json();
+  const d = (j.items || []).find((x) => x.draft_id === draftId);
+  if (!d) return;
+  document.getElementById('issuer').value = d.issuer;
+  document.getElementById('structure').value = d.structure;
+  document.getElementById('trade_date').value = d.trade_date;
+  document.getElementById('settle_date').value = addBizDays(d.trade_date, 10);
+  if (d.yel === 'Y') {
+    document.getElementById('yel_y').checked = true;
+    document.getElementById('yelDateWrap').style.display = 'flex';
+    if (d.yel_effective_date) document.getElementById('yel_effective_date').value = d.yel_effective_date;
+  }
+  refreshRecent();
+  document.getElementById('issuer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function discardDraft(draftId) {
+  await fetch(`${API}/predictions/discard`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+    body: JSON.stringify({ draft_id: draftId }),
+  });
+  refreshDrafts();
+}
+
+function gatherForm() {
+  const ps = parseStruct(document.getElementById('structure').value);
+  const sent = document.querySelector('.s-opt input:checked');
+  const yelChecked = document.getElementById('yel_y').checked;
+  return {
+    issuer:           document.getElementById('issuer').value,
+    cusip:            document.getElementById('cusip').value.trim() || null,
+    trade_date:       document.getElementById('trade_date').value,
+    settle_date:      document.getElementById('settle_date').value,
+    structure:        document.getElementById('structure').value.trim(),
+    coupon:           parseFloat(document.getElementById('coupon').value),
+    size_mm:          document.getElementById('size_mm').value || null,
+    fees_bp:          parseFloat(document.getElementById('fees_bp').value),
+    dnt:              document.getElementById('dnt').checked,
+    desk_notes:       document.getElementById('desk_notes').value,
+    market_sentiment: sent ? sent.value : '',
+    funding:              document.getElementById('funding').value.trim() || null,
+    spread:               document.getElementById('spread').value.trim() || null,
+    oas_par:              document.getElementById('oas_par').value || null,
+    oas_cost:             document.getElementById('oas_cost').value || null,
+    yel:                  yelChecked ? 'Y' : '',
+    yel_effective_date:   yelChecked ? (document.getElementById('yel_effective_date').value || null) : '',
+    dealers_count:        document.getElementById('dealers_count').value || null,
+    pre_ioi:              document.getElementById('pre_ioi').value || '',
+    competing_prints:     document.getElementById('competing_prints').value || null,
+    ann_to_pricing_minutes: document.getElementById('ann_to_pricing_minutes').value || null,
+    // model_pred / user_pred / user_confidence used to live on the Pre-auction card.
+    // After consolidation they may not be in the DOM — read defensively.
+    model_pred:           (document.getElementById('model_pred') || {}).value || '',
+    user_pred:            ((document.getElementById('user_pred') || {}).value || '').trim() || '',
+    user_confidence:      (document.getElementById('user_confidence') || {}).value || '',
+    _parsedStruct: ps,
+  };
+}
+
+async function refreshRecent() {
+  const ps = parseStruct(document.getElementById('structure').value);
+  if (!ps) return;
+  const issuer = document.getElementById('issuer').value;
+  const r = await fetch(`${API}/recent-prints?tenor=${ps.tenor}&issuer=${issuer}`, { headers: { Authorization: `Bearer ${getToken()}` } });
+  const j = await r.json();
+  document.getElementById('rcCount').textContent = j.count ?? 0;
+  document.getElementById('rcAvgFund').textContent = j.avg_funding_bp != null ? `${j.avg_funding_bp} bp` : '—';
+  document.getElementById('rcAvgFees').textContent = j.avg_fees_bp != null ? `${j.avg_fees_bp} bp` : '—';
+  document.getElementById('rcTrend').textContent = j.trend_bp != null ? `${j.trend_bp >= 0 ? '+' : ''}${j.trend_bp} bp` : '—';
+  const tbl = document.getElementById('rcSample');
+  if (j.sample && j.sample.length) {
+    tbl.style.display = 'table';
+    const tb = tbl.querySelector('tbody');
+    tb.innerHTML = '';
+    for (const s of j.sample) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${s.pricing_date}</td><td>${s.cusip || '-'}</td><td>${s.fees || '-'}</td><td>${s.funding || '-'}</td>`;
+      tb.appendChild(tr);
+    }
+  } else {
+    tbl.style.display = 'none';
+  }
+}
+
+async function doPreview() {
+  const data = gatherForm();
+  document.getElementById('err').textContent = '';
+  document.getElementById('ok').textContent = '';
+  document.getElementById('previewOut').style.display = 'none';
+  document.getElementById('status').textContent = 'computing…';
+  try {
+    const r = await fetch(`${API}/desk/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify(data),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'preview failed');
+    document.getElementById('previewOut').style.display = 'block';
+    document.getElementById('previewOut').textContent = JSON.stringify(j, null, 2);
+    if (j.funding) {
+      document.getElementById('model_funding_shown').value = `${j.funding.sofr_spread_bp} / ${j.funding.model_fees_bp}`;
+      const actual = parseFloat(data.funding_actual);
+      if (isFinite(actual)) {
+        const gap = +(actual - j.funding.sofr_spread_bp).toFixed(2);
+        document.getElementById('funding_gap_shown').value = (gap >= 0 ? '+' : '') + gap + ' bp';
+      }
+    }
+    document.getElementById('saveBtn').disabled = false;
+    document.getElementById('status').textContent = `previewed (curve ${j.curveAsOf || 'unknown'})`;
+  } catch (e) {
+    document.getElementById('err').textContent = e.message;
+    document.getElementById('status').textContent = '';
+  }
+}
+
+async function doSave() {
+  const data = gatherForm();
+  document.getElementById('err').textContent = '';
+  document.getElementById('ok').textContent = '';
+  document.getElementById('status').textContent = 'saving…';
+  try {
+    const r = await fetch(`${API}/desk/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify(data),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'save failed');
+    document.getElementById('ok').textContent = `saved → ${j.row.cusip}${j.isPlaceholder ? '  (placeholder; will reconcile when CUSIP arrives)' : ''}`;
+    document.getElementById('status').textContent = '';
+    document.getElementById('saveBtn').disabled = true;
+  } catch (e) {
+    document.getElementById('err').textContent = e.message;
+    document.getElementById('status').textContent = '';
+  }
+}
+
+async function doBulkDates() {
+  const text = document.getElementById('bulkDates').value;
+  const out = document.getElementById('bulkDatesOut');
+  out.textContent = 'updating...';
+  try {
+    const r = await fetch(`${API}/desk/bulk-fix-dates`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ entries: text }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'failed');
+    let msg = `updated ${j.updated} / ${j.total}`;
+    if (j.notFound && j.notFound.length) msg += ` · not found: ${j.notFound.join(', ')}`;
+    out.textContent = msg;
+  } catch (e) { out.textContent = 'err: ' + e.message; }
+}
+
+async function doReconcile() {
+  document.getElementById('reconcileOut').textContent = 'running…';
+  try {
+    const r = await fetch(`${API}/desk/reconcile`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'reconcile failed');
+    document.getElementById('reconcileOut').textContent = `scanned ${j.scanned} placeholder(s), matched ${j.matched}`;
+  } catch (e) {
+    document.getElementById('reconcileOut').textContent = 'err: ' + e.message;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Live Market Snapshot
+// ──────────────────────────────────────────────────────────────────────
+// Replace any typed comma with a period (handles locales that map ',' as the
+// decimal separator). Applies to one input element.
+function _forceDecimalPeriod(el) {
+  el.setAttribute('lang', 'en-US');
+  el.addEventListener('keydown', (ev) => {
+    if (ev.key === ',') {
+      ev.preventDefault();
+      const start = el.selectionStart, end = el.selectionEnd;
+      const v = el.value;
+      el.value = v.slice(0, start) + '.' + v.slice(end);
+      el.selectionStart = el.selectionEnd = start + 1;
+    }
+  });
+  el.addEventListener('input', () => {
+    if (el.value.includes(',')) el.value = el.value.replace(/,/g, '.');
+  });
+}
+
+async function initSnapshot() {
+  document.getElementById('snapDateLabel').textContent = '— ' + _fmtUS(_todayIso());
+  // Load today's snapshot
+  try {
+    const r = await fetch(`${API}/market-snapshot?date=${_todayIso()}`, { headers: _authHdr() });
+    if (r.ok) {
+      const j = await r.json();
+      if (j.row) {
+        for (const el of document.querySelectorAll('.snapField')) {
+          const f = el.dataset.field;
+          if (j.row[f] !== '' && j.row[f] != null) el.value = j.row[f];
+        }
+        if (j.row.updated_at) {
+          const t = new Date(j.row.updated_at);
+          document.getElementById('snapStatus').textContent = `updated ${t.toLocaleTimeString()} by ${j.row.updated_by || ''}`;
+        }
+      }
+    }
+  } catch (_) {}
+  // Autosave on blur + force period as decimal separator
+  for (const el of document.querySelectorAll('.snapField')) {
+    _forceDecimalPeriod(el);
+    el.addEventListener('blur', () => saveSnapshotField(el));
+    el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') el.blur(); });
+  }
+}
+
+async function saveSnapshotField(el) {
+  const body = { [el.dataset.field]: el.value };
+  try {
+    const r = await fetch(`${API}/market-snapshot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ..._authHdr() },
+      body: JSON.stringify(body),
+    });
+    if (r.ok) {
+      const j = await r.json();
+      const t = new Date();
+      document.getElementById('snapStatus').textContent = `updated ${t.toLocaleTimeString()} by ${(j.row || {}).updated_by || ''}`;
+    }
+  } catch (_) {}
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Morning Indications
+// ──────────────────────────────────────────────────────────────────────
+// NYC-time "today" — markets run on ET, so we follow that calendar.
+function _todayIso() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  return `${parts.find(p => p.type==='year').value}-${parts.find(p => p.type==='month').value}-${parts.find(p => p.type==='day').value}`;
+}
+function _authHdr() { return { Authorization: `Bearer ${getToken()}` }; }
+function _esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+}
+
+// Display ISO "YYYY-MM-DD" as "MM/DD/YYYY". Anything that doesn't match the
+// ISO shape (e.g. already-formatted, empty, or non-date strings) is passed
+// through unchanged so we don't mangle other content.
+function _fmtUS(iso) {
+  if (!iso) return '';
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso;
+  return `${m[2]}/${m[3]}/${m[1]}`;
+}
+
+async function initIndications() {
+  document.getElementById('indDateLabel').textContent = '— ' + _fmtUS(_todayIso());
+  document.getElementById('indPreviewBtn').onclick = previewIndication;
+  document.getElementById('indSaveBtn').onclick    = saveIndication;
+  document.getElementById('indRefreshDayBtn').onclick = refreshIndicationDay;
+  // Force period decimal separator on all numeric indication inputs
+  ['indSize', 'indFees', 'indTargetFund', 'indUserPred'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) _forceDecimalPeriod(el);
+  });
+  await loadIndications();
+}
+
+// Accepts "5/21", "5/21/26", "5/21/2026", or "2026-05-21" → returns "YYYY-MM-DD" (or null).
+// Bare "M/D" defaults to the current year.
+function _parseFlexDate(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  // ISO already
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // M/D, M/D/YY, M/D/YYYY
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2}|\d{4}))?$/);
+  if (!m) return null;
+  let [, mo, d, y] = m;
+  mo = parseInt(mo, 10); d = parseInt(d, 10);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  let year;
+  if (!y) year = parseInt(_todayIso().slice(0, 4), 10);  // NYC current year
+  else if (y.length === 2) year = 2000 + parseInt(y, 10);
+  else year = parseInt(y, 10);
+  return `${year.toString().padStart(4,'0')}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function _readIndForm() {
+  const settleRaw = document.getElementById('indSettle').value.trim();
+  const settleIso = _parseFlexDate(settleRaw);
+  return {
+    issuer:                  document.getElementById('indIssuer').value,
+    structure:               document.getElementById('indStructure').value.trim(),
+    settle_date:             settleIso,
+    settle_raw:              settleRaw,
+    yel:                     document.getElementById('indYel').value,
+    size_mm:                 document.getElementById('indSize').value || null,
+    fees:                    document.getElementById('indFees').value || null,
+    target_funding_spread:   document.getElementById('indTargetFund').value || null,
+    user_pred:               document.getElementById('indUserPred').value || '',
+    user_confidence:         document.getElementById('indUserConf').value || '',
+  };
+}
+
+function _speedBadge(category) {
+  const cfg = {
+    fast:       { icon: '⚡', label: 'Trades fast',      color: '#1a7a3e', bg: '#e6f4ea' },
+    normal:     { icon: '⊙', label: 'Normal clearance', color: '#666',    bg: '#f0f0f0' },
+    slow:       { icon: '🐌', label: 'Slow / cover risk', color: '#b58400', bg: '#fef7e0' },
+    likely_dnt: { icon: '✗', label: 'Likely DNT',       color: '#b13a3a', bg: '#fce8e8' },
+  };
+  const c = cfg[category] || cfg.normal;
+  return `<span style="background:${c.bg}; color:${c.color}; padding:2px 8px; border-radius:3px; font-size:11px; font-weight:600;">${c.icon} ${c.label}</span>`;
+}
+
+async function previewIndication() {
+  const body = _readIndForm();
+  const errEl = document.getElementById('indErr');
+  const prevEl = document.getElementById('indPreview');
+  errEl.textContent = '';
+  prevEl.style.display = 'none';
+  prevEl.innerHTML = '';
+  if (!body.settle_date) {
+    errEl.textContent = `Could not read settle date "${body.settle_raw}". Try: 5/21, 5/21/26, or 2026-05-21.`;
+    return;
+  }
+  try {
+    const r = await fetch(`${API}/indications/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ..._authHdr() },
+      body: JSON.stringify(body),
+    });
+    const j = await r.json();
+    if (!j.ok) { errEl.textContent = (j.errors || [j.error || 'preview failed']).join('; '); return; }
+    prevEl.innerHTML = _renderIndicationCard(j);
+    prevEl.style.display = 'block';
+    // After a comparable signal save, debounced recompute keeps aggressive/cheap fresh.
+    _wireComparableSignals(prevEl, () => previewIndication());
+  } catch (e) { errEl.textContent = 'error: ' + e.message; }
+}
+
+async function saveIndication() {
+  const body = _readIndForm();
+  const errEl = document.getElementById('indErr');
+  errEl.textContent = '';
+  if (!body.settle_date) {
+    errEl.textContent = `Could not read settle date "${body.settle_raw}". Try: 5/21, 5/21/26, or 2026-05-21.`;
+    return;
+  }
+  try {
+    const r = await fetch(`${API}/indications`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ..._authHdr() },
+      body: JSON.stringify(body),
+    });
+    const j = await r.json();
+    if (!j.ok) { errEl.textContent = (j.errors || [j.error || 'save failed']).join('; '); return; }
+    document.getElementById('indStructure').value = '';
+    document.getElementById('indFees').value = '';
+    document.getElementById('indTargetFund').value = '';
+    document.getElementById('indPreview').style.display = 'none';
+    await loadIndications();
+  } catch (e) { errEl.textContent = 'error: ' + e.message; }
+}
+
+async function loadIndications() {
+  const r = await fetch(`${API}/indications?trade_date=${_todayIso()}&status=open`, { headers: _authHdr() });
+  if (!r.ok) return;
+  const j = await r.json();
+  const listEl = document.getElementById('indList');
+  if (!j.rows || !j.rows.length) {
+    listEl.innerHTML = '<div style="color:var(--muted); font-size:12px; padding:8px 0;">No indications yet for today. Enter a structure above and click Preview, then Save.</div>';
+    return;
+  }
+  listEl.innerHTML = j.rows.map((row) => _renderSavedCard(row)).join('');
+  for (const row of j.rows) _wireSavedCardHandlers(row);
+  // Wire comparable signal inputs across all saved cards. Signal-save reloads
+  // the list so updated aggressive/cheap appear on the saved row.
+  document.querySelectorAll('#indList .ind-card').forEach((el) =>
+    _wireComparableSignals(el, () => loadIndications())
+  );
+}
+
+function _renderReasoningBody(rsn, issuer, structure) {
+  const overrides = (rsn.curve_overrides || []).join(', ') || 'none (using FRED EOD)';
+  const moveLine = rsn.move_used
+    ? `MOVE ${rsn.move_used} → σ scalar ${rsn.move_scalar} → σ <b>${rsn.sigma_used} bp</b> (base ${rsn.sigma_base_bp ?? '—'} bp)`
+    : `σ <b>${rsn.sigma_used} bp</b> (no MOVE override)`;
+  const biasLine = rsn.bias_sample_n
+    ? `Bias correction: <b>${rsn.bias_correction_bp >= 0 ? '+' : ''}${rsn.bias_correction_bp} bp</b> (EWMA from ${rsn.bias_sample_n} matched prints — applied to target)`
+    : `Bias correction: <i>no matched prints yet</i>`;
+  let speedLine = '';
+  if (rsn.speed_factors) {
+    const f = rsn.speed_factors;
+    speedLine = `Speed factors: size ${f.size_mm}MM · popularity ${f.structure_popularity} · YEL Δ${f.yel_delta} · funding Δ${f.funding_aggressiveness_delta} · MOVE Δ${f.move_delta} · post-print Δ${f.post_print_delta ?? 0}`;
+  }
+  // Comparables — each row has editable signals
+  const compRows = (rsn.comparables || []).map((c) => {
+    const id = c.cusip;
+    const upChecked = (c.upsize_status && c.upsize_status !== '') ? 'checked' : '';
+    const structCell = c.structure_exact === false
+      ? `<span title="near-match: lockout diff ${c.lockout_diff_yrs}y" style="color:var(--warn);">${_esc(c.structure)}</span>`
+      : `${_esc(c.structure)}`;
+    return `<tr data-comp-cusip="${_esc(id)}">
+      <td>${_fmtUS(c.pricing_date)}</td>
+      <td style="font-family:ui-monospace,monospace;">${_esc(c.cusip)}</td>
+      <td>${structCell}</td>
+      <td>${_esc(c.coupon)}</td>
+      <td>${_esc(c.fees)}</td>
+      <td title="${c.yel_mismatch ? 'YEL mismatch: adjusted ' + c.funding_spread + ' → ' + c.funding_spread_adj : ''}">
+        ${_esc(c.funding_spread)}${c.yel_mismatch ? ` <span style="color:var(--warn); font-size:10px;">→ ${c.funding_spread_adj}</span>` : ''}
+      </td>
+      <td>${_esc(c.yel)}</td>
+      <td style="text-align:center;"><input type="checkbox" class="comp-upsized" data-cusip="${_esc(id)}" ${upChecked} title="Upsized?" /></td>
+      <td><input class="comp-upsize-amt" data-cusip="${_esc(id)}" type="number" step="any" placeholder="—" value="${isFinite(c.upsize_amount_mm) ? c.upsize_amount_mm : ''}" style="width:46px;" title="Upsize amount MM" /></td>
+      <td><input class="comp-left" data-cusip="${_esc(id)}" type="number" step="any" placeholder="—" value="${isFinite(c.bonds_left_street_mm) ? c.bonds_left_street_mm : ''}" style="width:46px;" title="Bonds left MM" /></td>
+      <td><input class="comp-traded" data-cusip="${_esc(id)}" type="number" step="any" placeholder="—" value="${isFinite(c.last_traded_price) ? c.last_traded_price : ''}" style="width:56px;" title="Last traded price" /></td>
+      <td><input class="comp-price" data-cusip="${_esc(id)}" type="number" step="any" placeholder="—" value="${isFinite(c.current_price) ? c.current_price : ''}" style="width:56px;" title="Current showing price" /></td>
+      <td><span class="comp-save-status" data-cusip="${_esc(id)}" style="font-size:10px; color:var(--good);"></span></td>
+    </tr>`;
+  }).join('');
+  return `
+    <div>Funding anchor: <b>${rsn.sample_avg_funding ?? '—'} bp</b> ± ${rsn.sample_std_funding ?? '—'} bp from <b>${rsn.sample_size}</b> recent ${_esc(issuer)} ${_esc(structure)} prints (<i>${_esc(rsn.funding_source)}</i>)</div>
+    ${rsn.yel_mismatched_comparables ? `<div>YEL funding adj: shifted ${rsn.yel_mismatched_comparables} comparable(s) by <b>${rsn.yel_delta_bp >= 0 ? '+' : ''}${rsn.yel_delta_bp} bp</b> · scope: <i>${_esc(rsn.yel_delta_scope)}</i></div>` : ''}
+    ${rsn.yel_fees_adj_bp ? `<div>YEL fees adj: <b>${rsn.yel_fees_adj_bp >= 0 ? '+' : ''}${rsn.yel_fees_adj_bp} bp</b> on fees · scope: <i>${_esc(rsn.yel_fees_scope)}</i></div>` : ''}
+    <div>Fees source: <i>${_esc(rsn.fees_source)}</i> · avg fees of comparables: ${rsn.sample_avg_fees ?? '—'} bp</div>
+    <div>${biasLine}</div>
+    <div>Live curve overrides: <i>${overrides}</i> · ${moveLine} · curve date ${_fmtUS(rsn.curve_date)}</div>
+    ${speedLine ? `<div>${speedLine}</div>` : ''}
+    ${compRows ? `<div style="margin-top:10px;">
+      <div style="font-weight:600; margin-bottom:4px; color:var(--accent);">Comparable color — fill in to compute Aggressive & Cheap:</div>
+      <table style="font-size:11px; width:100%; border-collapse:collapse;">
+        <thead><tr style="color:var(--muted); background:#f5f5f5;">
+          <th align="left">date</th><th align="left">cusip</th><th align="left">struct</th><th align="left">cpn</th><th align="left">fees</th><th align="left">fund</th><th align="left">yel</th>
+          <th title="Was it upsized?">ups?</th>
+          <th title="Upsize amount (MM)">+MM</th>
+          <th title="Bonds left on street (MM)">left</th>
+          <th title="Last traded price (if still trading)">traded</th>
+          <th title="Current showing/offer price">show</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${compRows}</tbody>
+      </table></div>` : ''}
+  `;
+}
+
+// Wire up per-comparable signal inputs and trigger a debounced recompute.
+// Debounce is intentionally long so typing several fields back-to-back doesn't
+// trigger a re-render mid-keystroke (which would steal focus). Also skip the
+// recompute entirely if any comp-* input is currently focused.
+function _wireComparableSignals(rootEl, onChange) {
+  if (!rootEl) return;
+  let debounceT = null;
+  const triggerRecompute = () => {
+    if (typeof onChange !== 'function') return;
+    if (debounceT) clearTimeout(debounceT);
+    debounceT = setTimeout(() => {
+      const active = document.activeElement;
+      const inSurvey = active && active.classList && (
+        active.classList.contains('comp-left') ||
+        active.classList.contains('comp-traded') ||
+        active.classList.contains('comp-price') ||
+        active.classList.contains('comp-upsize-amt')
+      );
+      if (inSurvey) {
+        // User is still typing — push the recompute back another beat.
+        triggerRecompute();
+        return;
+      }
+      onChange();
+    }, 2000);
+  };
+  const saveSig = async (cusip, field, value) => {
+    const status = rootEl.querySelector(`.comp-save-status[data-cusip="${cusip}"]`);
+    if (status) status.textContent = '...';
+    try {
+      const body = field === 'upsize_status'
+        ? { upsize_status: value ? 'upsized' : '' }
+        : { [field]: value === '' ? '' : value };
+      const r = await fetch(`${API}/issues/${encodeURIComponent(cusip)}/post-print`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ..._authHdr() },
+        body: JSON.stringify(body),
+      });
+      if (status) {
+        if (r.ok) { status.textContent = '✓'; setTimeout(() => { status.textContent = ''; }, 1500); }
+        else      { status.style.color = 'var(--bad)'; status.textContent = 'err'; }
+      }
+      if (r.ok) triggerRecompute();
+    } catch (e) { if (status) { status.style.color = 'var(--bad)'; status.textContent = 'err'; } }
+  };
+  // Force period as decimal separator on all numeric comparable signal fields
+  rootEl.querySelectorAll('.comp-upsize-amt, .comp-left, .comp-traded, .comp-price').forEach((el) => {
+    _forceDecimalPeriod(el);
+  });
+  rootEl.querySelectorAll('.comp-upsized').forEach((el) => {
+    el.addEventListener('change', () => {
+      saveSig(el.dataset.cusip, 'upsize_status', el.checked);
+      // Show/hide the +MM input next to it
+      const amtInput = rootEl.querySelector(`.comp-upsize-amt[data-cusip="${el.dataset.cusip}"]`);
+      if (amtInput) amtInput.disabled = !el.checked;
+    });
+  });
+  rootEl.querySelectorAll('.comp-upsize-amt').forEach((el) => {
+    // Disable +MM if no upsize is checked
+    const cb = rootEl.querySelector(`.comp-upsized[data-cusip="${el.dataset.cusip}"]`);
+    if (cb && !cb.checked) el.disabled = true;
+    el.addEventListener('blur', () => saveSig(el.dataset.cusip, 'upsize_amount_mm', el.value));
+  });
+  rootEl.querySelectorAll('.comp-left').forEach((el) => {
+    el.addEventListener('blur', () => saveSig(el.dataset.cusip, 'bonds_left_street_mm', el.value));
+  });
+  rootEl.querySelectorAll('.comp-traded').forEach((el) => {
+    el.addEventListener('blur', () => saveSig(el.dataset.cusip, 'last_traded_price', el.value));
+  });
+  rootEl.querySelectorAll('.comp-price').forEach((el) => {
+    el.addEventListener('blur', () => saveSig(el.dataset.cusip, 'current_price', el.value));
+  });
+}
+
+function _renderPredictedLine(p) {
+  const fmt = (v) => v == null || v === '' ? '—' : v;
+  return `
+    <div style="background:#f8fafd; border:1px solid #d0dae8; border-radius:5px; padding:10px 14px; margin-top:10px;">
+      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+        <div style="font-size:12px; font-weight:700; color:var(--accent); letter-spacing:0.5px;">PREDICTED</div>
+        <div style="font-family:ui-monospace,monospace; font-size:14px;">cpn <b>${fmt(p.coupon_low)} — ${fmt(p.coupon_high)}</b></div>
+        <div style="font-family:ui-monospace,monospace; font-size:13px;">fund <b>${fmt(p.funding_spread)} bp</b></div>
+        <div style="font-family:ui-monospace,monospace; font-size:13px;">spread <b>${_esc(p.spread || '—')}</b></div>
+        <div>${_speedBadge(p.speed_at_predicted)}</div>
+        <div style="font-size:11px; color:var(--muted);">fees ${fmt(p.fees_used)} bp</div>
+      </div>
+    </div>
+  `;
+}
+
+function _renderCheapAggressive(p) {
+  const fmt = (v) => v == null || v === '' ? '—' : v;
+  // If neither computed, show prompt
+  if (p.aggressive_coupon == null && p.cheap_coupon == null) {
+    return `<div style="margin-top:8px; padding:8px 10px; background:#fffbeb; border:1px solid #f0d674; border-radius:4px; font-size:12px; color:#856404;">
+      Fill in any of the <b>comparable color</b> below (upsized? bonds left? current price?) to compute aggressive and cheap levels.
+    </div>`;
+  }
+  return `
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:8px;">
+      <div style="border:1px solid #f0d2d2; background:#fffafa; border-radius:5px; padding:8px 12px;">
+        <div style="font-size:11px; font-weight:700; color:var(--bad); letter-spacing:0.5px;">AGGRESSIVE — wins, watch cover</div>
+        <div style="font-family:ui-monospace,monospace; font-size:13px; margin-top:4px;">
+          cpn <b>${fmt(p.aggressive_coupon)}</b> · fund <b>${fmt(p.aggressive_funding)} bp</b>
+        </div>
+      </div>
+      <div style="border:1px solid #cfe8d6; background:#f7fcf9; border-radius:5px; padding:8px 12px;">
+        <div style="font-size:11px; font-weight:700; color:var(--good); letter-spacing:0.5px;">CHEAP — trades very fast</div>
+        <div style="font-family:ui-monospace,monospace; font-size:13px; margin-top:4px;">
+          cpn <b>${fmt(p.cheap_coupon)}</b> · fund <b>${fmt(p.cheap_funding)} bp</b>
+        </div>
+      </div>
+    </div>
+    ${p.tiers_source ? `<div style="font-size:11px; color:var(--muted); margin-top:4px;">derived from ${_esc(p.tiers_source)}</div>` : ''}
+  `;
+}
+
+function _renderIndicationCard(result) {
+  const i = result.inputs, a = result.auto, p = result.prediction, rsn = result.reasoning;
+  const yelTag = i.yel === 'Y' ? '<span style="background:#fff3cd; color:#856404; font-size:11px; padding:1px 5px; border-radius:3px; margin-left:6px;">YEL</span>' : '';
+  return `
+    <div class="ind-card" style="border:1px solid var(--border); border-radius:6px; padding:12px; margin-top:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="font-weight:600;">${_esc(i.issuer)} ${_esc(i.structure)} ${yelTag}
+          <span style="color:var(--muted); font-weight:400; font-size:12px; margin-left:8px;">
+            settle ${_fmtUS(i.settle_date)} · mat ${_fmtUS(a.maturity_date)} · first call ${_fmtUS(a.first_call_date)}
+          </span>
+        </div>
+      </div>
+      ${_renderPredictedLine(p)}
+      <div class="ind-survey" style="margin-top:10px;">
+        ${_renderReasoningBody(rsn, i.issuer, i.structure)}
+      </div>
+      ${_renderCheapAggressive(p)}
+    </div>
+  `;
+}
+
+function _renderSavedCard(row) {
+  const rsn = row.reasoning || {};
+  const yelTag = row.yel === 'Y' ? '<span style="background:#fff3cd; color:#856404; font-size:11px; padding:1px 5px; border-radius:3px; margin-left:6px;">YEL</span>' : '';
+  // Match info — shows if a real CUSIP has been linked by ingest
+  let matchBlock = '';
+  if (row.actual_cusip && row.actual_cusip !== '') {
+    const gap = parseFloat(row.gap_bp);
+    const gapSign = isFinite(gap) ? (gap > 0 ? '+' : '') : '';
+    const gapColor = !isFinite(gap) ? 'var(--muted)' : (Math.abs(gap) <= 2 ? 'var(--good)' : (Math.abs(gap) <= 5 ? 'var(--warn)' : 'var(--bad)'));
+    matchBlock = `
+      <div style="margin-top:6px; padding:6px 8px; background:#f3f8ff; border-radius:4px; font-size:12px;">
+        ✓ <b>Matched ${_esc(row.actual_cusip)}</b>
+        <span style="margin-left:10px; color:var(--muted);">actual coupon ${_esc(row.actual_coupon)} · actual funding ${_esc(row.actual_funding_spread)} bp</span>
+        ${isFinite(gap) ? `<span style="margin-left:10px; color:${gapColor}; font-weight:600;">gap ${gapSign}${gap} bp</span>` : ''}
+      </div>`;
+  }
+  const tierP = {
+    coupon_low:  row.predicted_coupon_low,
+    coupon_high: row.predicted_coupon_high,
+    funding_spread: row.predicted_funding_spread,
+    spread:      row.predicted_spread,
+    fees_used:   row.fees_used,
+    aggressive_coupon:  row.aggressive_coupon  || null,
+    aggressive_funding: row.aggressive_funding || null,
+    cheap_coupon:       row.cheap_coupon       || null,
+    cheap_funding:      row.cheap_funding      || null,
+    speed_at_predicted: row.speed_at_predicted || 'normal',
+    tiers_source:       null,  // computed only on live re-preview
+  };
+  const sizeTag = row.size_mm ? `<span style="color:var(--muted); font-size:12px; margin-left:8px;">${_esc(row.size_mm)}MM</span>` : '';
+  const inAuction = row.in_auction_at && row.in_auction_at !== '';
+  const cardBorder = inAuction ? '2px solid var(--accent)' : '1px solid var(--border)';
+  const cardBg = inAuction ? 'background:#f0f7ff;' : '';
+  const inAuctionBadge = inAuction ? '<span style="background:var(--accent); color:white; font-size:10px; padding:2px 6px; border-radius:3px; margin-left:6px;">IN AUCTION</span>' : '';
+  const refreshedTag = (inAuction && row.refreshed_at) ? `<span style="color:var(--muted); font-size:11px; margin-left:6px;" title="${_esc(row.refreshed_at)}">↻ refreshed</span>` : '';
+  const userPredTag = (row.user_pred && row.user_pred !== '')
+    ? `<span style="color:var(--muted); font-size:12px; margin-left:8px;">your cpn ${_esc(row.user_pred)}${row.user_confidence ? ' (' + _esc(row.user_confidence) + ')' : ''}</span>`
+    : '';
+  return `
+    <div class="ind-card" style="border:${cardBorder}; ${cardBg} border-radius:6px; padding:12px; margin-top:10px;" data-ind-id="${_esc(row.indication_id)}">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="font-weight:600;">${_esc(row.issuer)} ${_esc(row.structure)} ${yelTag}${sizeTag}${inAuctionBadge}${refreshedTag}
+          <span style="color:var(--muted); font-weight:400; font-size:12px; margin-left:8px;">
+            settle ${_fmtUS(row.settle_date)} · mat ${_fmtUS(row.maturity_date)} · first call ${_fmtUS(row.first_call_date)}
+          </span>${userPredTag}
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="secondary ind-toggle-auction" data-id="${_esc(row.indication_id)}" style="padding:4px 10px; font-size:12px; ${inAuction ? 'background:var(--accent); color:white;' : ''}" title="Mark this as actually going to auction today — re-runs the predictor with current market data">${inAuction ? '✓ In auction' : 'Going to auction'}</button>
+          <button class="secondary ind-del" data-id="${_esc(row.indication_id)}" style="padding:4px 10px; font-size:12px;">Remove</button>
+        </div>
+      </div>
+      ${_renderPredictedLine(tierP)}
+      ${matchBlock}
+      <div class="ind-survey" style="margin-top:10px;">
+        ${_renderReasoningBody(rsn, row.issuer, row.structure)}
+      </div>
+      ${_renderCheapAggressive(tierP)}
+      <div style="margin-top:8px;">
+        <label style="font-size:11px; color:var(--muted); display:block; margin-bottom:3px;">Market color / feedback</label>
+        <textarea class="ind-mc" data-id="${_esc(row.indication_id)}" placeholder="e.g. 35MM all traded right away, upsized +15MM, 13MM sold right away again" style="width:100%; min-height:50px; font-size:13px;">${_esc(row.market_color || '')}</textarea>
+        <div style="display:flex; justify-content:flex-end; margin-top:4px;">
+          <button class="secondary ind-save-mc" data-id="${_esc(row.indication_id)}" style="padding:4px 10px; font-size:12px;">Save color</button>
+          <span class="ind-mc-status" data-id="${_esc(row.indication_id)}" style="font-size:11px; color:var(--good); margin-left:8px; align-self:center;"></span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function _wireSavedCardHandlers(row) {
+  const id = row.indication_id;
+  document.querySelectorAll(`.ind-del[data-id="${id}"]`).forEach((btn) => {
+    btn.onclick = async () => {
+      if (!confirm('Remove this indication?')) return;
+      const r = await fetch(`${API}/indications/${id}`, { method: 'DELETE', headers: _authHdr() });
+      if (r.ok) await loadIndications();
+    };
+  });
+  document.querySelectorAll(`.ind-save-mc[data-id="${id}"]`).forEach((btn) => {
+    btn.onclick = async () => {
+      const ta = document.querySelector(`.ind-mc[data-id="${id}"]`);
+      const status = document.querySelector(`.ind-mc-status[data-id="${id}"]`);
+      const r = await fetch(`${API}/indications/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ..._authHdr() },
+        body: JSON.stringify({ market_color: ta.value }),
+      });
+      if (r.ok) { status.textContent = 'saved'; setTimeout(() => { status.textContent = ''; }, 1500); }
+      else      { status.style.color = 'var(--bad)'; status.textContent = 'error'; }
+    };
+  });
+  document.querySelectorAll(`.ind-toggle-auction[data-id="${id}"]`).forEach((btn) => {
+    btn.onclick = async () => {
+      btn.disabled = true;
+      btn.textContent = '…';
+      try {
+        const r = await fetch(`${API}/indications/${id}/toggle-in-auction`, {
+          method: 'POST',
+          headers: _authHdr(),
+        });
+        if (r.ok) await loadIndications();
+        else { alert('toggle failed'); btn.disabled = false; }
+      } catch (e) { alert('error: ' + e.message); btn.disabled = false; }
+    };
+  });
+}
+
+async function refreshIndicationDay() {
+  if (!confirm('Archive all open indications for today? This is the end-of-day refresh.')) return;
+  const r = await fetch(`${API}/indications/refresh-day`, { method: 'POST', headers: _authHdr() });
+  if (r.ok) await loadIndications();
+}
+
+checkAuth();
+</script>
+</body>
+</html>

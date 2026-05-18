@@ -36,7 +36,6 @@ body { font-family:'IBM Plex Sans',sans-serif; background:var(--bg); color:var(-
 .login-btn { width:100%;padding:10px;background:var(--gold);color:#0b0e17;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:500;border:none;border-radius:var(--r);cursor:pointer;transition:opacity .15s; }
 .login-btn:hover { opacity:.9; }
 .login-err { font-size:12px;color:var(--red);margin-top:.75rem;display:none; }
-.login-note { font-size:11px;color:var(--text3);margin-top:1rem;text-align:center; }
 
 /* ── App shell ── */
 #app { display:none; }
@@ -208,11 +207,10 @@ nav { display:flex;gap:1px; }
   <div class="login-box">
     <div class="login-logo">SPREAD DESK</div>
     <div class="login-sub">Internal platform · Authorized access only</div>
-    <div class="login-field"><label>Username</label><input type="text" id="login-user" placeholder="desk@yourfirm.com"></div>
-    <div class="login-field"><label>Password</label><input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div class="login-field"><label>Username</label><input type="text" id="login-user" autocomplete="username" autofocus></div>
+    <div class="login-field"><label>Password</label><input type="password" id="login-pass" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="login-btn" onclick="doLogin()">Sign in</button>
     <div class="login-err" id="login-err">Invalid credentials. Contact your administrator.</div>
-    <div class="login-note">Demo: user <strong>desk</strong> · pass <strong>demo123</strong></div>
   </div>
 </div>
 
@@ -224,13 +222,16 @@ nav { display:flex;gap:1px; }
     <span class="int-badge">Internal</span>
     <nav>
       <button class="nav-btn active" onclick="showPage('inventory',this)">Inventory</button>
+      <button class="nav-btn" onclick="showPage('mm',this)">Money market</button>
       <button class="nav-btn" onclick="showPage('markup',this)">Markup sim</button>
       <button class="nav-btn" onclick="showPage('trace',this)">TRACE log</button>
       <button class="nav-btn" onclick="showPage('nim2',this)">NIM2 feed</button>
       <button class="nav-btn" onclick="showPage('outlook-int',this)">Outlook</button>
+      <button class="nav-btn" onclick="showPage('client-desk',this)">Client desk <span id="nav-cd-badge" style="display:none;background:var(--red);color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;margin-left:4px"></span></button>
     </nav>
   </div>
   <div class="topbar-right">
+    <a href="/agency" target="_blank" class="client-link" title="Open the Agency Desk (internal-only, requires sign-in)">Agency desk ↗</a>
     <a href="/client" target="_blank" class="client-link" title="Open the client-facing site in a new tab">Client view ↗</a>
     <span class="live-dot">LIVE</span>
     <span id="int-sofr">SOFR —</span>
@@ -286,6 +287,14 @@ nav { display:flex;gap:1px; }
       <table class="dt" id="inv-table"></table>
       <div id="no-products-message" style="display:none;text-align:center;padding:1.5rem;color:var(--text3);font-size:13px;">No products available.</div>
 
+      <!-- Live per-CUSIP offerings — same data as the client page sees -->
+      <div class="panel" style="margin-bottom:1.25rem">
+        <div class="panel-title">
+          Live per-CUSIP offerings <span id="inv-off-sub" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px">— same feed the client side sees, with internal markup column</span>
+        </div>
+        <table class="dt" id="inv-off-table"></table>
+      </div>
+
       <div class="panel" style="margin-bottom:1.25rem">
         <div class="panel-title">Yield curves by product class <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3)">— customer yield = live UST + category spread</span></div>
         <div id="yc-grid" class="yc-grid"></div>
@@ -296,6 +305,62 @@ nav { display:flex;gap:1px; }
           Top opportunities <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px">— rungs trading widest vs trailing 30d average (cheapest entry)</span>
         </div>
         <div id="opp-list"></div>
+      </div>
+    </div>
+
+    <!-- MONEY MARKET -->
+    <div class="page" id="page-mm">
+      <div class="panel" style="margin-bottom:1rem">
+        <div class="panel-title">
+          Discount-note &amp; money-market converter
+          <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px">enter price OR yield in any convention — all four update live</span>
+        </div>
+        <div class="sim-grid">
+          <div class="sim-field">
+            <div class="sim-label">Settlement</div>
+            <select class="sim-input" id="mm-settle" onchange="recomputeMM()">
+              <option value="0">T+0 (cash)</option>
+              <option value="1" selected>T+1 (regular way)</option>
+            </select>
+          </div>
+          <div class="sim-field">
+            <div class="sim-label">Maturity date</div>
+            <input class="sim-input" id="mm-mat" type="date" oninput="recomputeMM()">
+          </div>
+          <div class="sim-field">
+            <div class="sim-label">Or days to maturity</div>
+            <input class="sim-input" id="mm-days" type="number" min="1" max="397" placeholder="e.g. 90" oninput="onMMDaysInput()">
+          </div>
+          <div class="sim-field">
+            <div class="sim-label">Face value ($)</div>
+            <input class="sim-input" id="mm-face" type="number" value="100" step="1" oninput="recomputeMM()">
+          </div>
+          <div class="sim-field">
+            <div class="sim-label">Input as</div>
+            <select class="sim-input" id="mm-mode" onchange="recomputeMM()">
+              <option value="discountRate">Discount Rate (Act/360)</option>
+              <option value="bey" selected>Bond Equivalent Yield (Act/365)</option>
+              <option value="mmy">Money Market Yield (Act/360)</option>
+              <option value="price">Price (per 100 face)</option>
+            </select>
+          </div>
+          <div class="sim-field">
+            <div class="sim-label">Value</div>
+            <input class="sim-input" id="mm-value" type="number" step="0.01" value="4.30" oninput="recomputeMM()">
+          </div>
+        </div>
+        <div class="sim-output" id="mm-out" style="grid-template-columns:repeat(5,1fr)"></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.5">
+          DR (Act/360 on face) · MMY (Act/360 on price) · BEY (Act/365 on price). Convention: SIFMA Standard Securities Calculation Methods.
+          T-bills are typically quoted on Discount Rate; auction results show Investment Rate (BEY equivalent). Settlement T+1 is regular way; T+0 is cash same-day for bills/discos.
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">
+          Live money-market inventory <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px">— ≤ 12 months: T-bills (TreasuryDirect) + sub-1y agency notes (FHLB / FFCB)</span>
+        </div>
+        <table class="dt" id="mm-table"></table>
       </div>
     </div>
 
@@ -370,11 +435,19 @@ nav { display:flex;gap:1px; }
 
     <!-- OUTLOOK INTERNAL -->
     <div class="page" id="page-outlook-int">
+      <!-- Trade ideas — INTERNAL ONLY -->
+      <div class="panel" style="margin-bottom:1rem;border:1px solid rgba(200,169,110,0.4);background:linear-gradient(180deg,var(--bg2),rgba(200,169,110,0.04))">
+        <div class="panel-title" style="color:var(--gold)">
+          Trade ideas <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px">— sales-trader voice · internal only · refreshed daily 7am ET</span>
+          <button class="refresh-pill" onclick="refreshMarketColorInt()" style="border-color:var(--gold);color:var(--gold)">Force refresh</button>
+        </div>
+        <div id="trade-ideas-int" style="font-size:13.5px;color:var(--text);line-height:1.7;font-family:'IBM Plex Sans',sans-serif"><span style="color:var(--text3);font-style:italic">Loading…</span></div>
+      </div>
+
       <!-- Overnight color -->
       <div class="panel" style="margin-bottom:1rem">
         <div class="panel-title">
           Overnight bond market color
-          <button class="refresh-pill" onclick="refreshMarketColorInt()">Force refresh</button>
         </div>
         <div id="ov-blurb-int" style="font-size:13px;color:var(--text);line-height:1.65"><span style="color:var(--text3);font-style:italic">Loading…</span></div>
         <div id="ov-strip-int" class="fwd-strip-int" style="margin-top:12px"></div>
@@ -415,6 +488,37 @@ nav { display:flex;gap:1px; }
       </div>
     </div>
 
+    <!-- CLIENT DESK — incoming RFQs + messages + reply UI -->
+    <div class="page" id="page-client-desk">
+      <div class="panel" style="margin-bottom:1rem">
+        <div class="panel-title">
+          Inbound RFQs
+          <span id="cd-rfq-count" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px">—</span>
+        </div>
+        <table class="dt" id="cd-rfq-table"></table>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">
+          Client messages
+          <span id="cd-msg-count" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px">—</span>
+        </div>
+        <div id="cd-msg-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;max-height:340px;overflow-y:auto"></div>
+        <div style="display:grid;grid-template-columns:1fr 1.6fr auto;gap:8px;align-items:end">
+          <div class="sim-field">
+            <div class="sim-label">To (client name, blank = broadcast)</div>
+            <input class="sim-input" id="cd-reply-to" type="text" placeholder="">
+          </div>
+          <div class="sim-field">
+            <div class="sim-label">Reply text</div>
+            <input class="sim-input" id="cd-reply-text" type="text" placeholder="Type a reply…" onkeydown="if(event.key==='Enter')sendDeskReply()">
+          </div>
+          <button class="refresh-pill" style="background:var(--gold);color:#0b0e17;font-weight:500;padding:8px 18px" onclick="sendDeskReply()">Send</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px" id="cd-reply-status">Replies push to clients via SSE in real time.</div>
+      </div>
+    </div>
+
   </div>
 </div>
 </div>
@@ -426,7 +530,20 @@ const API_BASE = (window.location.protocol === 'file:') ? 'http://localhost:3001
 const INTERNAL_TOKEN = '270c3508bc9bca1b100e3e056ae9dbb4fb5c52d58730e3295ea664efb45be493'; // must match server INTERNAL_TOKEN env var on Render
 
 // Demo credentials — replace with real auth in production
-const DEMO_CREDS = { desk: 'demo123', admin: 'admin123' };
+// Demo credentials — replace with real auth before exposing publicly
+const DEMO_CREDS = { desk: 'demo123' };
+
+function doLogin() {
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  if (DEMO_CREDS[user] === pass) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    initApp();
+  } else {
+    document.getElementById('login-err').style.display = 'block';
+  }
+}
 
 async function apiFetch(path, internal=false) {
   const headers = { 'Content-Type': 'application/json' };
@@ -442,19 +559,6 @@ async function apiPost(path, body={}, internal=false) {
   const res = await fetch(API_BASE + path, { method:'POST', headers, body:JSON.stringify(body) });
   if (!res.ok) throw new Error(res.status);
   return res.json();
-}
-
-// ─── Login ────────────────────────────────────────────────────────────────────
-function doLogin() {
-  const user = document.getElementById('login-user').value.trim();
-  const pass = document.getElementById('login-pass').value;
-  if (DEMO_CREDS[user] === pass) {
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    initApp();
-  } else {
-    document.getElementById('login-err').style.display = 'block';
-  }
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -658,6 +762,13 @@ function showPage(id, btn) {
   if (id==='outlook-int') loadMarketColorInt();
   if (id==='trace') loadTrace();
   if (id==='nim2') loadNewIssues();
+  if (id==='mm') { loadMM(); recomputeMM(); }
+  if (id==='inventory') loadInventoryOfferings();
+  if (id==='client-desk') {
+    loadClientDesk();
+    const badge = document.getElementById('nav-cd-badge');
+    if (badge) badge.style.display = 'none';
+  }
 }
 
 // ─── Sidebar filters ──────────────────────────────────────────────────────────
@@ -773,6 +884,65 @@ function renderInventory() {
   populateOpportunities(items);
 }
 
+// Live per-CUSIP offerings rendered on the Inventory tab (parity with /client).
+// Internal version adds an estimated $ markup column for desk reference.
+async function loadInventoryOfferings() {
+  const tbl = document.getElementById('inv-off-table');
+  const sub = document.getElementById('inv-off-sub');
+  if (!tbl) return;
+  try {
+    const data = await _fetchNewIssuesShared();
+    const items = (data.items || []).slice().sort((a, b) => {
+      // Settling today first, then upcoming, then by spread desc
+      if ((a.upcoming?1:0) !== (b.upcoming?1:0)) return (a.upcoming?1:0) - (b.upcoming?1:0);
+      return (b.spreadBps ?? -999) - (a.spreadBps ?? -999);
+    });
+    if (sub) sub.textContent = `— ${items.length} live · sources ${(data.sources||[]).join(', ')} · refreshed ${new Date(data.updatedAt).toLocaleTimeString()}`;
+    if (!items.length) {
+      tbl.innerHTML = '<tbody><tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--text3)">No live offerings.</td></tr></tbody>';
+      return;
+    }
+    // Internal markup heuristic: street-typical bps × tenor × 1mm face / 100 → $ per 1mm
+    const estMarkupDollars = (offering) => {
+      const cat = (offering.type || '').toLowerCase();
+      let typBps = 0;
+      if (cat.includes('callable')) typBps = 22;       // Callable Agency street typical
+      else if (cat.includes('bullet') || cat.includes('floater')) typBps = 9;
+      else if (cat.includes('treasury')) typBps = 3;
+      const yrs = offering.tenorYrs || 1;
+      return Math.round(typBps * yrs * 100);            // $ per $1mm face, rough
+    };
+    tbl.innerHTML = `
+      <thead><tr>
+        <th>CUSIP / issuer</th><th>Type</th><th>Tenor / structure</th><th>Coupon</th>
+        <th>Size</th><th>UST bench</th><th>Spread</th><th>Est markup ($/MM)</th><th>Status</th>
+      </tr></thead>
+      <tbody>${items.map(o => {
+        const tenor = o.tenorYrs != null ? (o.tenorYrs<2?o.tenorYrs.toFixed(2):o.tenorYrs.toFixed(1))+'y' : '—';
+        const struct = o.callStructure ? `<span style="color:var(--gold)">${o.callStructure}</span>` : (o.callable?'callable':'bullet');
+        const status = o.upcoming
+          ? `<span class="chip cb">Upcoming · ${o.auctionDate||''}</span>`
+          : `<span class="chip cg">Settling today</span>`;
+        const mk = estMarkupDollars(o);
+        return `
+        <tr>
+          <td><div class="mono" style="font-size:12px">${o.cusip||'—'}</div><div style="font-size:11px;color:var(--text3)">${o.issuer||''} ${o.series||''}</div></td>
+          <td><span class="chip ${o.callable?'ca':'cn'}">${o.type||'—'}</span></td>
+          <td><span class="mono">${tenor}</span> · ${struct}</td>
+          <td class="mono">${o.couponLabel||'—'}</td>
+          <td class="mono">${o.sizeLabel||'—'}</td>
+          <td class="mono" style="font-size:11px;color:var(--text3)">${o.ustBenchmark||'—'}</td>
+          <td class="mono">${o.spreadLabel||'—'}</td>
+          <td class="mono" style="color:var(--green)">${mk ? '~$'+mk.toLocaleString() : '—'}</td>
+          <td>${status}</td>
+        </tr>`;
+      }).join('')}</tbody>`;
+  } catch (e) {
+    console.error('inventory offerings load failed:', e);
+    tbl.innerHTML = '<tbody><tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--text3)">Could not load offerings (check internal token).</td></tr></tbody>';
+  }
+}
+
 // Top opportunities: rungs sorted by how cheap they are vs trailing 30d avg.
 // Real ranking from live data — no static content.
 function populateOpportunities(items) {
@@ -806,6 +976,101 @@ function populateOpportunities(items) {
       </div>
     </div>`;
   }).join('');
+}
+
+// ─── Money-market converter (client-side) ───────────────────────────────────
+// Math mirrored from server (mmFromPrice / mmFromDiscountRate / mmFromMMY / mmFromBEY).
+function _mmFromPrice(price, days, face) {
+  if (!Number.isFinite(price) || !Number.isFinite(days) || days <= 0) return null;
+  const interest = face - price;
+  return {
+    face, days, price,
+    discountRate: (interest / face) * (360 / days),
+    mmy:          (interest / price) * (360 / days),
+    bey:          (interest / price) * (365 / days),
+    interest,
+  };
+}
+function recomputeMM() {
+  const settle = +document.getElementById('mm-settle').value;
+  const matEl = document.getElementById('mm-mat');
+  const daysEl = document.getElementById('mm-days');
+  const face = +document.getElementById('mm-face').value || 100;
+  const mode = document.getElementById('mm-mode').value;
+  const value = +document.getElementById('mm-value').value;
+
+  // Resolve days: prefer maturity date if provided
+  let days = +daysEl.value;
+  if (matEl.value) {
+    const today = new Date();
+    today.setDate(today.getDate() + settle);
+    today.setHours(0,0,0,0);
+    const m = new Date(matEl.value);
+    days = Math.round((m - today) / 86400000);
+    daysEl.value = days > 0 ? days : '';
+  }
+
+  const out = document.getElementById('mm-out');
+  if (!Number.isFinite(days) || days <= 0 || !Number.isFinite(value)) {
+    out.innerHTML = '<div style="grid-column:1/-1;color:var(--text3);font-size:12px">Enter days and a value to compute.</div>';
+    return;
+  }
+
+  let r = null;
+  if      (mode === 'price')        r = _mmFromPrice(value, days, face);
+  else if (mode === 'discountRate') r = _mmFromPrice(face * (1 - (value/100) * days / 360), days, face);
+  else if (mode === 'mmy')          r = _mmFromPrice(face / (1 + (value/100) * days / 360), days, face);
+  else if (mode === 'bey')          r = _mmFromPrice(face / (1 + (value/100) * days / 365), days, face);
+
+  if (!r) { out.innerHTML = '<div style="grid-column:1/-1;color:var(--red)">Conversion failed</div>'; return; }
+  const cellOn  = (active, label, val) => `
+    <div style="${active?'border:1px solid var(--gold);border-radius:6px;padding:8px':''}">
+      <div class="so-label">${label}${active?' · input':''}</div>
+      <div class="so-val ${active?'a':''}">${val}</div>
+    </div>`;
+  out.innerHTML = `
+    ${cellOn(mode==='price',        'Price',                     r.price.toFixed(4))}
+    ${cellOn(mode==='discountRate', 'Discount Rate (Act/360)',   (r.discountRate*100).toFixed(3)+'%')}
+    ${cellOn(mode==='mmy',          'Money Market Yield (Act/360)',(r.mmy*100).toFixed(3)+'%')}
+    ${cellOn(mode==='bey',          'Bond Equivalent Yield (Act/365)',(r.bey*100).toFixed(3)+'%')}
+    <div><div class="so-label">$ Interest / 100 face</div><div class="so-val">${r.interest.toFixed(4)}</div></div>`;
+}
+function onMMDaysInput() {
+  // Manual days entry clears maturity date so the days input wins
+  document.getElementById('mm-mat').value = '';
+  recomputeMM();
+}
+
+async function loadMM() {
+  try {
+    const data = await apiFetch('/api/public/money-market');
+    const items = data.items || [];
+    const tbl = document.getElementById('mm-table');
+    if (!items.length) {
+      tbl.innerHTML = '<tbody><tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--text3)">No money-market instruments in current feed.</td></tr></tbody>';
+      return;
+    }
+    tbl.innerHTML = `
+      <thead><tr>
+        <th>CUSIP / issuer</th><th>Type / series</th><th>Days</th><th>Maturity</th>
+        <th>Size</th><th>Discount rate</th><th>MMY</th><th>BEY</th><th>Status</th>
+      </tr></thead>
+      <tbody>${items.map(i => `
+        <tr>
+          <td><div class="mono" style="font-size:12px">${i.cusip||'—'}</div><div style="font-size:11px;color:var(--text3)">${i.issuer||''}</div></td>
+          <td style="font-size:12px">${i.type||'—'} <span style="color:var(--text3)">${i.series||''}</span></td>
+          <td class="mono">${i.days != null ? i.days : '—'}</td>
+          <td class="mono" style="font-size:12px">${i.maturity||'—'}</td>
+          <td class="mono">${i.sizeLabel||'—'}</td>
+          <td class="mono">${i.discountRatePct != null ? i.discountRatePct.toFixed(3)+'%' : '—'}</td>
+          <td class="mono">${i.mmyPct          != null ? i.mmyPct.toFixed(3)+'%' : '—'}</td>
+          <td class="mono" style="color:var(--gold2);font-weight:500">${i.beyPct != null ? i.beyPct.toFixed(3)+'%' : '—'}</td>
+          <td>${i.upcoming ? '<span class="chip cb">Upcoming</span>' : '<span class="chip cg">Live</span>'}</td>
+        </tr>`).join('')}</tbody>`;
+  } catch (e) {
+    console.error('MM load failed:', e);
+    document.getElementById('mm-table').innerHTML = '<tbody><tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--text3)">Backend unavailable.</td></tr></tbody>';
+  }
 }
 
 function runSim() {
@@ -897,14 +1162,29 @@ function renderNIM2() {
   }
 }
 
+// Dedupe: both NIM2 page and Inventory tab need /api/internal/new-issues —
+// we fetch once and share. Refresh stale-time uses the server's 30-min cache.
+let _newIssuesPromise = null;
+let _newIssuesAt = 0;
+async function _fetchNewIssuesShared() {
+  if (_newIssuesPromise && (Date.now() - _newIssuesAt) < 60_000) return _newIssuesPromise;
+  _newIssuesAt = Date.now();
+  _newIssuesPromise = apiFetch('/api/internal/new-issues', true).catch(e => {
+    _newIssuesPromise = null; throw e;
+  });
+  return _newIssuesPromise;
+}
+
 async function loadNewIssues() {
   try {
-    const data = await apiFetch('/api/internal/new-issues', true);
+    const data = await _fetchNewIssuesShared();
     if (Array.isArray(data.items)) {
       NIM2.splice(0, NIM2.length, ...data.items);
       renderNIM2();
       const status = document.getElementById('nim2-status');
-      if (status) status.textContent = `Live · ${data.items.length} settling today · src ${(data.sources||[]).join(', ')}`;
+      if (status) status.textContent = data.stale
+        ? `Loading… data populating in background`
+        : `Live · ${data.items.length} settling today · src ${(data.sources||[]).join(', ')}`;
     }
   } catch (e) {
     console.error('Failed to load new issues:', e);
@@ -924,6 +1204,7 @@ function renderMarketColorInt(mc) {
   const syn = mc.synthesis || {};
   const blurbs = (syn && !syn.parseError) ? (syn.assetBlurbs || {}) : {};
   const cbSyn  = (syn && !syn.parseError) ? (syn.centralBanks || {}) : {};
+  renderTradeIdeasInt(syn);
 
   // Overnight color
   const ust = mc.ust?.curve || {};
@@ -966,7 +1247,7 @@ function renderMarketColorInt(mc) {
       return `<span><span class="fl">${r.label}</span> <span class="fv">${r.unit}${fmt(r.current)}</span>${chgStr}</span>`;
     };
     const f2 = v => Number(v).toFixed(2);
-    eoRisk.innerHTML = ['brent','wti','vix','breakeven10','breakeven5'].map(k => riskCell(k, f2)).filter(Boolean).join('') + `<span class="fl" style="margin-left:auto">supporting risk indicators (1d Δ)</span>`;
+    eoRisk.innerHTML = ['brent','wti','move','breakeven10','breakeven5'].map(k => riskCell(k, f2)).filter(Boolean).join('') + `<span class="fl" style="margin-left:auto">supporting risk indicators (1d Δ) · MOVE = Treasury option-implied vol</span>`;
   }
   const eoNews = document.getElementById('eo-news-int');
   if (eoNews) {
@@ -1066,25 +1347,162 @@ function renderMarketColorInt(mc) {
   }
 }
 
+// ─── CLIENT DESK: RFQ queue + messages + reply ──────────────────────────────
+let _cdLastSeenCounts = { rfq: 0, msg: 0 };
+async function loadClientDesk() {
+  try {
+    const [rfqRes, msgRes] = await Promise.all([
+      apiFetch('/api/internal/rfq/queue', true),
+      apiFetch('/api/internal/messages/queue', true),
+    ]);
+    renderRfqQueue(rfqRes.items || []);
+    renderClientMessages(msgRes.items || []);
+    updateClientDeskBadge(rfqRes.count || 0, msgRes.count || 0);
+  } catch (e) {
+    console.error('client desk load failed:', e);
+  }
+}
+function renderRfqQueue(items) {
+  const tbl = document.getElementById('cd-rfq-table');
+  if (!tbl) return;
+  document.getElementById('cd-rfq-count').textContent = `— ${items.length} on queue`;
+  if (items.length === 0) {
+    tbl.innerHTML = '<tbody><tr><td colspan="8" style="text-align:center;padding:1rem;color:var(--text3)">No RFQs yet.</td></tr></tbody>';
+    return;
+  }
+  tbl.innerHTML = `
+    <thead><tr>
+      <th>Received</th><th>From</th><th>CUSIP</th><th>Size</th><th>Settle</th><th>Notes</th><th>Status</th><th></th>
+    </tr></thead>
+    <tbody>${items.map(r => `
+      <tr>
+        <td style="font-size:12px">${new Date(r.receivedAt).toLocaleString()}</td>
+        <td>${r.clientName || '<span style="color:var(--text3)">anonymous</span>'}<div style="font-size:11px;color:var(--text3)">${r.clientEmail||''}</div></td>
+        <td><div class="mono" style="font-size:12px">${r.cusip}</div><div style="font-size:11px;color:var(--text3)">${r.issuer||''}</div></td>
+        <td class="mono">$${Number(r.size||0).toLocaleString()}</td>
+        <td class="mono" style="font-size:12px">${r.settle||'—'}</td>
+        <td style="font-size:12px;color:var(--text2);max-width:240px" title="${(r.notes||'').replace(/"/g,'&quot;')}">${r.notes||'—'}</td>
+        <td><span class="chip ${r.status==='quoted'?'cg':r.status==='declined'?'cr':'ca'}">${r.status}</span></td>
+        <td>
+          <button class="refresh-pill" style="font-size:11px;padding:3px 8px" onclick="updateRfq('${r.id}','quoted','Quoted — see message')">Quote</button>
+          <button class="refresh-pill" style="font-size:11px;padding:3px 8px" onclick="updateRfq('${r.id}','declined','')">Decline</button>
+        </td>
+      </tr>`).join('')}</tbody>`;
+}
+function renderClientMessages(items) {
+  const el = document.getElementById('cd-msg-list');
+  if (!el) return;
+  document.getElementById('cd-msg-count').textContent = `— ${items.length} total`;
+  if (items.length === 0) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:.5rem">No messages yet.</div>';
+    return;
+  }
+  // Show newest first, mix inbound + outbound
+  el.innerHTML = items.slice(0, 50).map(m => `
+    <div style="padding:8px 12px;background:var(--bg3);border-left:3px solid ${m.direction==='inbound'?'var(--blue)':'var(--gold)'};border-radius:0 6px 6px 0">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:3px">
+        <span><b style="color:${m.direction==='inbound'?'var(--blue)':'var(--gold)'}">${m.from}</b>${m.to?' → '+m.to:''}</span>
+        <span>${new Date(m.receivedAt||m.sentAt).toLocaleString()}</span>
+      </div>
+      <div style="font-size:13px;color:var(--text);line-height:1.5">${(m.text||'').replace(/</g,'&lt;')}</div>
+    </div>`).join('');
+}
+async function sendDeskReply() {
+  const toEl = document.getElementById('cd-reply-to');
+  const txtEl = document.getElementById('cd-reply-text');
+  const statusEl = document.getElementById('cd-reply-status');
+  const text = (txtEl.value || '').trim();
+  if (!text) { statusEl.innerHTML = '<span style="color:var(--red)">Type a message first.</span>'; return; }
+  const to = (toEl.value || '').trim();
+  try {
+    const r = await apiPost('/api/internal/messages/reply', { text, to: to || null }, true);
+    statusEl.innerHTML = `<span style="color:var(--green)">Sent (${r.recipients||0} client${r.recipients===1?'':'s'} subscribed)</span>`;
+    txtEl.value = '';
+    loadClientDesk();
+  } catch (e) {
+    statusEl.innerHTML = `<span style="color:var(--red)">Failed: ${e.message}</span>`;
+  }
+}
+async function updateRfq(id, status, note) {
+  try {
+    await apiPost('/api/internal/rfq/update', { id, status, note }, true);
+    loadClientDesk();
+  } catch (e) { console.error('RFQ update failed:', e); }
+}
+function updateClientDeskBadge(rfqCount, msgCount) {
+  const badge = document.getElementById('nav-cd-badge');
+  if (!badge) return;
+  const total = rfqCount + msgCount;
+  if (total > _cdLastSeenCounts.rfq + _cdLastSeenCounts.msg) {
+    badge.textContent = total;
+    badge.style.display = 'inline-block';
+  }
+}
+// Poll client desk queues every 30s when not on the desk tab
+setInterval(() => loadClientDesk(), 30 * 1000);
+
 async function loadMarketColorInt() {
   try {
-    const data = await apiFetch('/api/public/market-color');
+    // Internal endpoint includes the tradeIdeas blurb (stripped from /api/public)
+    const data = await apiFetch('/api/internal/market-color', true);
     renderMarketColorInt(data);
   } catch (e) {
     console.error('market color load failed:', e);
     const ovBlurb = document.getElementById('ov-blurb-int');
-    if (ovBlurb) ovBlurb.innerHTML = '<span style="color:var(--red)">Could not load market color — backend unavailable.</span>';
+    if (ovBlurb) ovBlurb.innerHTML = '<span style="color:var(--red)">Could not load market color — backend unavailable or token mismatch.</span>';
   }
 }
 
+function renderTradeIdeasInt(syn) {
+  const el = document.getElementById('trade-ideas-int');
+  if (!el) return;
+  if (!syn || syn.parseError || !syn.tradeIdeas) {
+    el.innerHTML = '<span style="color:var(--text3);font-style:italic">Trade ideas unavailable this cycle. Click Force refresh to regenerate.</span>';
+    return;
+  }
+  // Highlight the BOTTOM LINE separately and number the ideas as a list
+  const text = syn.tradeIdeas;
+  let body = text;
+  let bottomLine = '';
+  const blMatch = text.match(/BOTTOM LINE:\s*(.+)$/im);
+  if (blMatch) {
+    bottomLine = blMatch[1].trim();
+    body = text.replace(/BOTTOM LINE:.*$/im, '').trim();
+  }
+  // Convert numbered "1) ... 2) ..." into separate paragraphs for readability
+  const ideaParas = body.split(/\n+|(?=\d\))/).map(s => s.trim()).filter(Boolean);
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${ideaParas.map(p => `<div style="padding:10px 12px;background:var(--bg3);border-left:3px solid var(--gold);border-radius:0 6px 6px 0">${p}</div>`).join('')}
+    </div>
+    ${bottomLine ? `<div style="margin-top:14px;padding:10px 14px;background:rgba(200,169,110,0.10);border:1px solid rgba(200,169,110,0.3);border-radius:6px"><span style="color:var(--gold);font-weight:500;text-transform:uppercase;letter-spacing:.06em;font-size:11px">Bottom line</span><div style="margin-top:4px;color:var(--gold2)">${bottomLine}</div></div>` : ''}
+  `;
+}
+
 async function refreshMarketColorInt() {
-  const ovBlurb = document.getElementById('ov-blurb-int');
-  if (ovBlurb) ovBlurb.innerHTML = '<span style="color:var(--text3);font-style:italic">Regenerating via Claude…</span>';
+  const tradeIdeasEl = document.getElementById('trade-ideas-int');
+  const showStatus = (msg, color = 'var(--text3)') => {
+    if (tradeIdeasEl) tradeIdeasEl.innerHTML = `<span style="color:${color};font-style:italic">${msg}</span>`;
+  };
   try {
-    const data = await apiPost('/api/internal/market-color/refresh', {}, true);
-    renderMarketColorInt(data);
+    // Capture current updatedAt so we can detect when fresh synthesis lands
+    const before = await apiFetch('/api/internal/market-color', true);
+    const beforeAt = before?.updatedAt || '';
+    showStatus('Regenerating market color via Claude (typically 30–60s)…');
+    await apiPost('/api/internal/market-color/refresh', {}, true);  // returns immediately
+    // Poll for new synthesis up to 90s
+    for (let i = 0; i < 18; i++) {
+      await new Promise(r => setTimeout(r, 5000));
+      const fresh = await apiFetch('/api/internal/market-color', true);
+      if (fresh.updatedAt && fresh.updatedAt !== beforeAt) {
+        renderMarketColorInt(fresh);
+        return;
+      }
+    }
+    showStatus('Refresh in flight — Claude taking longer than 90s. Existing data still shown.', 'var(--amber)');
   } catch (e) {
-    if (ovBlurb) ovBlurb.innerHTML = '<span style="color:var(--red)">Refresh failed. Check API key and backend.</span>';
+    console.error('refresh failed:', e);
+    showStatus('Refresh failed — check backend.', 'var(--red)');
   }
 }
 
@@ -1149,11 +1567,14 @@ function initApp() {
   loadTrace();
   loadNewIssues();
   loadMarketColorInt();
+  loadInventoryOfferings();
+  loadClientDesk();      // populate RFQ + messages queues + nav badge
   renderInventory();
   runSim();
   renderTrace();
   renderNIM2();
 }
+
 </script>
 </body>
 </html>

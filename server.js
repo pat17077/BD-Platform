@@ -20,15 +20,54 @@ const path = require('path');
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+
+const deskAuth = require('./desk-auth');
 
 // Serve both UIs from the same server so the user can open
 //   http://localhost:3001/        → internal desk
 //   http://localhost:3001/client  → public client view
-app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-app.get('/client', (_req, res) => res.sendFile(path.join(__dirname, 'client.html')));
+// ─── Page auth (desk / client) ───────────────────────────────────────────────
+app.get('/login', (_req, res) => {
+  res.set('Content-Type', 'text/html; charset=utf-8').send(deskAuth.deskLoginHTML());
+});
+app.post('/login', (req, res) => {
+  const role = deskAuth.verifyDeskLogin(req.body.username, req.body.password);
+  if (!role) {
+    return res.status(401).set('Content-Type', 'text/html; charset=utf-8')
+      .send(deskAuth.deskLoginHTML('Invalid username or password'));
+  }
+  deskAuth.setCookie(res, role);
+  res.redirect('/');
+});
+app.get('/client/login', (_req, res) => {
+  res.set('Content-Type', 'text/html; charset=utf-8').send(deskAuth.clientLoginHTML());
+});
+app.post('/client/login', (req, res) => {
+  const role = deskAuth.verifyClientLogin(req.body.username, req.body.password);
+  if (!role) {
+    return res.status(401).set('Content-Type', 'text/html; charset=utf-8')
+      .send(deskAuth.clientLoginHTML('Invalid username or password'));
+  }
+  deskAuth.setCookie(res, role);
+  res.redirect('/client');
+});
+app.get('/logout', (_req, res) => {
+  deskAuth.clearCookie(res);
+  res.redirect('/login');
+});
+
+app.get('/', deskAuth.requireDeskPage, (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/client', deskAuth.requireClientPage, (_req, res) => res.sendFile(path.join(__dirname, 'client.html')));
 
 const FRED_API_KEY = process.env.FRED_API_KEY || 'YOUR_FRED_API_KEY';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'YOUR_ANTHROPIC_API_KEY';
+// Anthropic model selection — default to Haiku 4.5 (~10x cheaper than Sonnet)
+// for summarization-style workloads. Override via env to use Sonnet if you
+// want more polish.
+const ANTHROPIC_MODEL_OUTLOOK      = process.env.ANTHROPIC_MODEL_OUTLOOK      || 'claude-haiku-4-5-20251001';
+const ANTHROPIC_MODEL_MARKET_COLOR = process.env.ANTHROPIC_MODEL_MARKET_COLOR || 'claude-haiku-4-5-20251001';
+const DISABLE_AI = process.env.DISABLE_AI === '1' || process.env.DISABLE_AI === 'true';
 const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN || 'internal-secret-token';
 const PORT = process.env.PORT || 3001;
 
@@ -111,6 +150,17 @@ const POLICY_RATE_SERIES = {
 
 // Foreign 10y benchmark yields. Eurozone is daily via ECB SDW (handled separately);
 // the rest are monthly on FRED — will be flagged as monthly in the response.
+// Daily FX spot. Direction conventions vary on FRED — we normalize to "USD per
+// 1 unit of foreign currency" downstream so 1 EUR = $X (always > 0, intuitive).
+const FX_SERIES = {
+  'EUR': { id: 'DEXUSEU', invert: false, label: 'EUR/USD' },  // already USD per EUR
+  'GBP': { id: 'DEXUSUK', invert: false, label: 'GBP/USD' },  // already USD per GBP
+  'NOK': { id: 'DEXNOUS', invert: true,  label: 'NOK/USD' },  // FRED is NOK per USD → invert
+  'CHF': { id: 'DEXSZUS', invert: true,  label: 'CHF/USD' },  // FRED is CHF per USD → invert
+  'JPY': { id: 'DEXJPUS', invert: true,  label: 'JPY/USD' },
+  'CAD': { id: 'DEXCAUS', invert: true,  label: 'CAD/USD' },
+};
+
 const FOREIGN_10Y_SERIES = {
   'jp': { label: 'Japan 10y JGB',  id: 'IRLTLT01JPM156N', frequency: 'monthly' },
   'uk': { label: 'UK 10y Gilt',    id: 'IRLTLT01GBM156N', frequency: 'monthly' },
@@ -118,15 +168,17 @@ const FOREIGN_10Y_SERIES = {
   'au': { label: 'Australia 10y',  id: 'IRLTLT01AUM156N', frequency: 'monthly' },
 };
 
-// Risk-sentiment / commodity series (FRED daily). Oil = direct geopolitical proxy;
-// gold = risk-off; VIX = equity stress; breakevens = market inflation expectations.
+// Risk-sentiment / commodity / vol series. Mix of FRED (daily) and Yahoo (free).
+// Oil = direct geopolitical proxy; gold = risk-off; MOVE = Treasury option-implied
+// vol (THE bond-market equivalent of MOVE — far more relevant for FI than MOVE);
+// breakevens = market inflation expectations.
 const RISK_SERIES = {
-  'brent':    { label: 'Brent crude',          id: 'DCOILBRENTEU',     unit: '$' },
-  'wti':      { label: 'WTI crude',            id: 'DCOILWTICO',       unit: '$' },
-  'gold':     { label: 'Gold (LBMA AM fix)',   id: 'GOLDAMGBD228NLBM', unit: '$' },
-  'vix':      { label: 'VIX',                  id: 'VIXCLS',           unit: '' },
-  'breakeven10': { label: '10y breakeven inflation', id: 'T10YIE',     unit: '%' },
-  'breakeven5':  { label: '5y breakeven inflation',  id: 'T5YIE',      unit: '%' },
+  'brent':       { source:'fred',  label: 'Brent crude',                id: 'DCOILBRENTEU',     unit: '$' },
+  'wti':         { source:'fred',  label: 'WTI crude',                  id: 'DCOILWTICO',       unit: '$' },
+  'gold':        { source:'yahoo', label: 'Gold (COMEX front-month)',   id: 'GC=F',             unit: '$' },
+  'move':        { source:'yahoo', label: 'MOVE Index (Treasury vol)',  id: '^MOVE',            unit: ''  },
+  'breakeven10': { source:'fred',  label: '10y breakeven inflation',    id: 'T10YIE',           unit: '%' },
+  'breakeven5':  { source:'fred',  label: '5y breakeven inflation',     id: 'T5YIE',            unit: '%' },
 };
 
 // General news feeds — for catching geopolitical / market-moving events
@@ -233,11 +285,30 @@ function valueRatingFromPctRank(pct) {
 }
 
 // ─── Fetch single FRED series (last N observations) ───────────────────────────
+// Hard 8s timeout per attempt → max ~24s total for 3 attempts, never hangs forever.
+// If FRED returns an Akamai HTML error page (rate-limit / region-block), bail fast.
 async function fetchFredSeries(seriesId, limit = 3, attempt = 1) {
   const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${FRED_API_KEY}&file_type=json&sort_order=desc&limit=${limit}`;
   try {
-    const res = await fetch(url);
-    const data = await res.json();
+    const res = await fetch(url, { timeout: 8000 });
+    const ct = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
+    const text = await res.text();
+    // Akamai / FRED error pages come back as HTML — short-circuit instead of trying to parse
+    if (text.startsWith('<') || ct.includes('text/html')) {
+      if (attempt < 3) {
+        console.warn(`[fred] ${seriesId} got HTML error (try ${attempt}) — retrying`);
+        await new Promise(r => setTimeout(r, 600 * attempt));
+        return fetchFredSeries(seriesId, limit, attempt + 1);
+      }
+      console.warn(`[fred] ${seriesId} got HTML error after retries — likely Akamai block. Skipping.`);
+      return null;
+    }
+    let data;
+    try { data = JSON.parse(text); }
+    catch (e) {
+      console.warn(`[fred] ${seriesId} JSON parse failed:`, e.message);
+      return null;
+    }
     if (!data.observations) {
       if (data.error_message && attempt < 3) {
         console.warn(`[fred] ${seriesId} error (try ${attempt}): ${data.error_message} — retrying`);
@@ -417,6 +488,40 @@ async function fetchEcbCurve() {
 }
 
 // ─── Fetch foreign 10y benchmarks (monthly via FRED) ─────────────────────────
+// ─── Fetch FX spot rates (daily, FRED) ──────────────────────────────────────
+async function fetchFxRates() {
+  console.log('[fx] Fetching FX spot rates...');
+  const result = {};
+  for (const [code, info] of Object.entries(FX_SERIES)) {
+    try {
+      const obs = await fetchFredSeries(info.id, 30);
+      const stats = summarizeSeries(obs);
+      if (stats) {
+        // Normalize to "USD per 1 unit of <code>" — large/small number sanity
+        const usdPer = info.invert ? (1 / stats.current) : stats.current;
+        const usdPerPrior = info.invert ? (1 / (stats.priorDay ?? stats.current)) : (stats.priorDay ?? stats.current);
+        result[code] = {
+          code,
+          label: info.label,
+          seriesId: info.id,
+          inverted: info.invert,
+          usdPer: +usdPer.toFixed(6),
+          chg1d: +(usdPer - usdPerPrior).toFixed(6),
+          asOf: stats.asOf,
+          // 30-day stats on the normalized rate
+          avg30: info.invert ? +(1 / stats.avg30).toFixed(6) : +stats.avg30.toFixed(6),
+        };
+      }
+    } catch (e) {
+      console.error(`[fx] Failed ${code}:`, e.message);
+    }
+  }
+  cache.fx = result;
+  cache.fxUpdated = new Date().toISOString();
+  console.log('[fx] Updated:', Object.keys(result).length, 'pairs');
+  return result;
+}
+
 async function fetchForeignBenchmarks() {
   console.log('[foreign] Fetching foreign 10y benchmarks (monthly)...');
   const result = {};
@@ -496,15 +601,81 @@ async function fetchMarketNews() {
   return cache.marketNews;
 }
 
+// Fetch a daily series from Yahoo Finance over an arbitrary range. Returns
+// {date, value}[] with nulls/holidays filtered out. Used for both summary
+// stats (fetchYahooQuote) and the MOVE sparkline / percentile endpoint.
+async function fetchYahooSeries(symbol, range = '2mo') {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 SpreadDesk/1.0' }, timeout: 8000 });
+    if (!res.ok) { console.warn(`[yahoo] ${symbol} HTTP ${res.status}`); return null; }
+    const data = await res.json();
+    const r = data?.chart?.result?.[0];
+    if (!r) return null;
+    const closes = r.indicators?.quote?.[0]?.close || [];
+    const ts = r.timestamp || [];
+    const out = [];
+    for (let i = 0; i < closes.length; i++) {
+      if (Number.isFinite(closes[i]) && ts[i]) {
+        out.push({ date: new Date(ts[i] * 1000).toISOString().slice(0, 10), value: closes[i] });
+      }
+    }
+    return out;
+  } catch (e) {
+    console.warn(`[yahoo] ${symbol} series fetch failed:`, e.message);
+    return null;
+  }
+}
+
+// Fetch a daily quote from Yahoo Finance (free, no auth) — used for symbols
+// that aren't on FRED, e.g. ^MOVE (ICE BofA MOVE Index — bond-market option
+// vol, the FI equivalent of VIX).
+async function fetchYahooQuote(symbol, lookbackDays = 60) {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=2mo`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 SpreadDesk/1.0' }, timeout: 8000 });
+    if (!res.ok) { console.warn(`[yahoo] ${symbol} HTTP ${res.status}`); return null; }
+    const data = await res.json();
+    const r = data?.chart?.result?.[0];
+    if (!r) return null;
+    const closes = (r.indicators?.quote?.[0]?.close || []).filter(v => Number.isFinite(v));
+    const ts = r.timestamp || [];
+    if (closes.length === 0) return null;
+    const current = closes[closes.length - 1];
+    const lookback = (n) => closes[Math.max(0, closes.length - 1 - n)];
+    const win30 = closes.slice(-30);
+    const avg30 = win30.reduce((a, b) => a + b, 0) / win30.length;
+    const min30 = Math.min(...win30), max30 = Math.max(...win30);
+    return {
+      current: +current.toFixed(3),
+      avg30:   +avg30.toFixed(3),
+      min30:   +min30.toFixed(3),
+      max30:   +max30.toFixed(3),
+      asOf:    ts[ts.length - 1] ? new Date(ts[ts.length - 1] * 1000).toISOString().slice(0, 10) : null,
+      chg1d:   +((current - lookback(1))  || 0).toFixed(3),
+      chg1w:   +((current - lookback(5))  || 0).toFixed(3),
+      chg1m:   +((current - lookback(21)) || 0).toFixed(3),
+    };
+  } catch (e) {
+    console.warn(`[yahoo] ${symbol} fetch failed:`, e.message);
+    return null;
+  }
+}
+
 // ─── Fetch risk-sentiment / commodity indicators ────────────────────────────
 async function fetchRiskIndicators() {
-  console.log('[risk] Fetching risk indicators (oil, gold, VIX, breakevens)...');
+  console.log('[risk] Fetching risk indicators (oil, gold, MOVE, breakevens)...');
   const result = {};
   for (const [k, info] of Object.entries(RISK_SERIES)) {
     try {
-      const obs = await fetchFredSeries(info.id, 30);
-      const stats = summarizeSeries(obs);
-      if (stats) result[k] = { ...stats, label: info.label, unit: info.unit, seriesId: info.id };
+      let stats = null;
+      if (info.source === 'yahoo') {
+        stats = await fetchYahooQuote(info.id);
+      } else {
+        const obs = await fetchFredSeries(info.id, 30);
+        stats = summarizeSeries(obs);
+      }
+      if (stats) result[k] = { ...stats, label: info.label, unit: info.unit, seriesId: info.id, source: info.source };
     } catch (e) {
       console.error(`[risk] Failed ${k}:`, e.message);
     }
@@ -663,9 +834,12 @@ function rungSpread(category, yrs) {
   }
 }
 
-async function buildInternalProducts() {
-  if (!cache.curve)   await fetchCurve();
-  if (!cache.spreads) await fetchSpreads();
+// Synchronous: works on whatever's in cache. Caller must ensure caches are
+// populated via cron / startup. Triggers background refresh if cold but does
+// NOT block on it.
+function buildInternalProducts() {
+  if (!cache.curve)   _bgRefresh('curve', fetchCurve);
+  if (!cache.spreads) _bgRefresh('spreads', fetchSpreads);
   return PRODUCT_TEMPLATES.map(template => {
     const ladder = template.maturityRefs.map(ref => {
       const ust = cache.curve?.[ref];
@@ -836,7 +1010,14 @@ async function fetchFhlbNewIssues() {
         : null;
       const callSched = callMap[b.CUSIP] || [];
       const isCallable = (b.S === 'C' || (callSched.length > 0)) && (b.CALL || '').trim().toUpperCase() !== 'NON';
-      const coupon = parseFloat(b.COUPON);
+      const couponRaw = parseFloat(b.COUPON);
+      // Reject obvious misparses: real FHLB coupons sit in 0.5%–15%. Step-up bonds
+      // report only their first-period (often near-zero) coupon, which leaked into
+      // the money-market endpoint as bogus 0.01% discount rates. Drop coupon for
+      // those — the bond still appears as a callable in the inventory, just without
+      // a meaningful YTW/discount calc.
+      const coupon = (Number.isFinite(couponRaw) && couponRaw >= 0.5 && couponRaw <= 15)
+        ? couponRaw : null;
       const price = parseFloat(b.PRICE);
       const size = parseFloat(b.OUTSTANDING) || parseFloat(b.ORIGINAL);
       const ust = tenorYrs != null ? ustYieldForTenor(tenorYrs) : null;
@@ -865,7 +1046,9 @@ async function fetchFhlbNewIssues() {
         size:   Number.isFinite(size)   ? size   : null,
         ustBenchmark: ust ? `UST ${ust.tenor} @ ${ust.yield.toFixed(2)}%` : null,
         spreadBps,                            // YTM-to-UST spread (bps)
-        couponLabel: Number.isFinite(coupon) ? `${coupon.toFixed(2)}%` : '—',
+        couponLabel: Number.isFinite(coupon) ? `${coupon.toFixed(2)}%`
+                   : Number.isFinite(couponRaw) ? `${couponRaw.toFixed(2)}% (step/floater)`
+                   : '—',
         sizeLabel:   Number.isFinite(size)   ? `$${(size/1e6).toFixed(1)}MM` : '—',
         spreadLabel: spreadBps != null ? `${spreadBps >= 0 ? '+' : ''}${spreadBps} bps` : '—',
       };
@@ -933,15 +1116,31 @@ async function fetchFfcbNewIssues() {
       const tenorYrs = (r.issueDate && r.maturityDate)
         ? +(((new Date(r.maturityDate) - new Date(r.issueDate)) / (365.25 * 86400000)).toFixed(2))
         : null;
-      // Floater detection: coupon like "SOFR+8.5"
-      const floaterMatch = r.couponRaw.match(/^\s*(SOFR|FED|Prime|TBILL)\s*\+\s*([0-9.]+)/i);
+      // Floater detection — accept SOFR, FED FUNDS / FF, PRIME, TBILL with either
+      // +spread or -spread (Prime can quote either side). The earlier regex only
+      // accepted "+" and missed "FF" and "PRIME-…" — leaving them to fall through
+      // to parseFloat which produced false coupons like 0.035 from spread digits.
+      const floaterMatch = r.couponRaw.match(/^\s*(SOFR|SOFR30A|FED|FF|FFER|PRIME|T-BILL|TBILL)\s*([+-])\s*([0-9.]+)/i);
       let coupon = null, couponLabel = r.couponRaw, floater = null;
       if (floaterMatch) {
-        floater = { index: floaterMatch[1].toUpperCase(), spreadBps: +floaterMatch[2] };
-        couponLabel = `${floater.index}+${floater.spreadBps} bps`;
+        const idxRaw = floaterMatch[1].toUpperCase();
+        const idx = (idxRaw === 'FF' || idxRaw === 'FFER') ? 'FED'
+                  : (idxRaw === 'T-BILL') ? 'TBILL'
+                  : idxRaw;
+        const sign = floaterMatch[2] === '-' ? -1 : 1;
+        floater = { index: idx, spreadBps: sign * +floaterMatch[3] };
+        couponLabel = `${idx}${sign > 0 ? '+' : ''}${floater.spreadBps} bps`;
       } else {
         const num = parseFloat(r.couponRaw);
-        if (Number.isFinite(num)) { coupon = num; couponLabel = `${num.toFixed(3)}%`; }
+        // Reject obvious misparses: real agency coupons are between 0.5% and 15%.
+        // A "0.035" coupon is from a row where the cell contained just a spread
+        // value ("FF+3.5" being parsed as " 3.5" after a regex miss → 0.035 once
+        // we divide by some unintended factor) — better to drop the row than show
+        // 0.034% as a discount rate downstream.
+        if (Number.isFinite(num) && num >= 0.5 && num <= 15) {
+          coupon = num;
+          couponLabel = `${num.toFixed(3)}%`;
+        }
       }
       const ust = tenorYrs != null ? ustYieldForTenor(tenorYrs) : null;
       const spreadBps = (Number.isFinite(coupon) && ust)
@@ -1044,19 +1243,26 @@ async function fetchAllNewIssues() {
   return [...fhlb, ...ffcb, ...tsy];
 }
 
-let newIssuesCache = { items: null, updatedAt: null };
+let newIssuesCache = { items: null, updatedAt: null, populating: false };
 
-app.get('/api/internal/new-issues', requireInternal, async (req, res) => {
+function _bgPopulateNewIssues() {
+  if (newIssuesCache.populating) return;
+  newIssuesCache.populating = true;
+  fetchAllNewIssues()
+    .then(items => { newIssuesCache.items = items; newIssuesCache.updatedAt = new Date().toISOString(); })
+    .catch(e => console.warn('[new-issues] background populate failed:', e.message))
+    .finally(() => { newIssuesCache.populating = false; });
+}
+
+app.get('/api/internal/new-issues', requireInternal, (req, res) => {
   const stale = !newIssuesCache.items || !newIssuesCache.updatedAt ||
                 (Date.now() - new Date(newIssuesCache.updatedAt)) > 30 * 60 * 1000;
-  if (stale) {
-    newIssuesCache.items = await fetchAllNewIssues();
-    newIssuesCache.updatedAt = new Date().toISOString();
-  }
+  if (stale) _bgPopulateNewIssues();
   res.json({
-    items: newIssuesCache.items,
+    items: newIssuesCache.items || [],
     sources: ['FHLB Office of Finance', 'FFCB (Federal Farm Credit Banks)', 'TreasuryDirect'],
     updatedAt: newIssuesCache.updatedAt,
+    stale: !newIssuesCache.updatedAt,
   });
 });
 
@@ -1092,7 +1298,13 @@ Write a structured outlook with these exact sections. Use professional but acces
 
 Keep the total under 400 words. Write today's date as the publication date.`;
 
-  console.log('[outlook] Generating AI outlook via Claude...');
+  if (DISABLE_AI) {
+    console.log('[outlook] DISABLE_AI=1 — skipping Claude call, using cached/placeholder outlook');
+    cache.outlook = cache.outlook || { text: '(AI disabled)', generatedAt: new Date().toISOString() };
+    return cache.outlook;
+  }
+
+  console.log('[outlook] Generating AI outlook via Claude (model: ' + ANTHROPIC_MODEL_OUTLOOK + ')...');
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1103,7 +1315,7 @@ Keep the total under 400 words. Write today's date as the publication date.`;
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: ANTHROPIC_MODEL_OUTLOOK,
         max_tokens: 1000,
         messages: [{ role: 'user', content: prompt }]
       })
@@ -1170,34 +1382,149 @@ function addMonths(date, months) {
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
+// All GET endpoints are non-blocking: serve cache, populate in background if cold.
+
+// Track which background populates are in-flight so we don't queue duplicates
+const _bgFetching = new Set();
+function _bgRefresh(name, fn) {
+  if (_bgFetching.has(name)) return;
+  _bgFetching.add(name);
+  fn().catch(e => console.warn(`[${name}] background populate failed:`, e.message))
+      .finally(() => _bgFetching.delete(name));
+}
 
 // Public: Treasury yield curve
-app.get('/api/curve', async (req, res) => {
-  if (!cache.curve || !cache.curveUpdated ||
-      (Date.now() - new Date(cache.curveUpdated)) > 3600000) {
-    await fetchCurve();
-  }
-  res.json({ curve: cache.curve, updatedAt: cache.curveUpdated });
+app.get('/api/curve', (req, res) => {
+  const stale = !cache.curve || !cache.curveUpdated || (Date.now() - new Date(cache.curveUpdated)) > 3600000;
+  if (stale) _bgRefresh('curve', fetchCurve);
+  res.json({ curve: cache.curve || {}, updatedAt: cache.curveUpdated, stale });
 });
 
-// Public: Economic indicators (summary only for client)
-app.get('/api/econ', async (req, res) => {
-  if (!cache.economicData || !cache.economicUpdated ||
-      (Date.now() - new Date(cache.economicUpdated)) > 3600000) {
-    await fetchEconomicData();
-  }
-  res.json({ data: cache.economicData, updatedAt: cache.economicUpdated });
+// Public: Economic indicators
+app.get('/api/econ', (req, res) => {
+  const stale = !cache.economicData || !cache.economicUpdated || (Date.now() - new Date(cache.economicUpdated)) > 3600000;
+  if (stale) _bgRefresh('econ', fetchEconomicData);
+  res.json({ data: cache.economicData || {}, updatedAt: cache.economicUpdated, stale });
 });
 
-// Public: AI economic outlook (cached, refreshed weekly)
-app.get('/api/outlook', async (req, res) => {
+// Public: AI economic outlook (refreshed weekly)
+app.get('/api/outlook', (req, res) => {
   const oneWeek = 7 * 24 * 3600000;
-  if (!cache.outlook || !cache.outlookUpdated ||
-      (Date.now() - new Date(cache.outlookUpdated)) > oneWeek) {
-    await generateOutlook();
-  }
-  if (!cache.outlook) return res.status(503).json({ error: 'Outlook unavailable' });
+  const stale = !cache.outlook || !cache.outlookUpdated || (Date.now() - new Date(cache.outlookUpdated)) > oneWeek;
+  if (stale) _bgRefresh('outlook', generateOutlook);
+  if (!cache.outlook) return res.json({ text: '', stale: true, generatedAt: null });
   res.json(cache.outlook);
+});
+
+// ─── Discount note / money-market math ───────────────────────────────────────
+// Convert between: discount rate (Act/360 on face), price, money-market yield
+// (Act/360 on price), and bond-equivalent yield (Act/365 on price).
+// Convention reference: SIFMA Standard Securities Calculation Methods.
+function mmFromPrice(price, days, face = 100) {
+  if (!Number.isFinite(price) || !Number.isFinite(days) || days <= 0) return null;
+  const interest = face - price;
+  return {
+    face,
+    days,
+    price: +price.toFixed(6),
+    discountRate: +((interest / face) * (360 / days)).toFixed(6),
+    mmy:          +((interest / price) * (360 / days)).toFixed(6),
+    bey:          +((interest / price) * (365 / days)).toFixed(6),
+    interest:     +interest.toFixed(6),
+  };
+}
+function mmFromDiscountRate(dr, days, face = 100) {
+  if (!Number.isFinite(dr) || !Number.isFinite(days) || days <= 0) return null;
+  // P = F × (1 − DR × N / 360)
+  return mmFromPrice(face * (1 - dr * days / 360), days, face);
+}
+function mmFromMMY(mmy, days, face = 100) {
+  if (!Number.isFinite(mmy) || !Number.isFinite(days) || days <= 0) return null;
+  // MMY = (F − P) / P × 360 / N  →  P = F / (1 + MMY × N / 360)
+  return mmFromPrice(face / (1 + mmy * days / 360), days, face);
+}
+function mmFromBEY(bey, days, face = 100) {
+  if (!Number.isFinite(bey) || !Number.isFinite(days) || days <= 0) return null;
+  return mmFromPrice(face / (1 + bey * days / 365), days, face);
+}
+
+// Public: money-market yield converter — accept input in any of 4 conventions
+app.post('/api/mm/convert', (req, res) => {
+  const { face = 100, days, mode, value } = req.body || {};
+  if (!Number.isFinite(+days) || +days <= 0) return res.status(400).json({ error: 'days must be a positive number' });
+  if (!Number.isFinite(+value)) return res.status(400).json({ error: 'value must be numeric' });
+  const v = +value, n = +days, f = +face;
+  let result = null;
+  switch (mode) {
+    case 'price':         result = mmFromPrice(v, n, f); break;
+    case 'discountRate':  result = mmFromDiscountRate(v / 100, n, f); break;
+    case 'mmy':           result = mmFromMMY(v / 100, n, f); break;
+    case 'bey':           result = mmFromBEY(v / 100, n, f); break;
+    default: return res.status(400).json({ error: 'mode must be price | discountRate | mmy | bey' });
+  }
+  if (!result) return res.status(400).json({ error: 'Conversion failed — check inputs' });
+  // Format yields back to percentage
+  res.json({
+    face: result.face,
+    days: result.days,
+    price: result.price,
+    discountRatePct: +(result.discountRate * 100).toFixed(4),
+    mmyPct:          +(result.mmy * 100).toFixed(4),
+    beyPct:          +(result.bey * 100).toFixed(4),
+    interestPer100:  result.interest,
+  });
+});
+
+// Public: money-market instrument inventory — T-bills today + GSE discos when scrapable
+app.get('/api/public/money-market', (_req, res) => {
+  // Use cached new-issues; populate in background if cold
+  if (!newIssuesCache.items) _bgPopulateNewIssues();
+  const all = newIssuesCache.items || [];
+  const itemsRaw = all
+    .filter(i => i.tenorYrs != null && i.tenorYrs <= 1.05)        // ≤ ~12 months
+    .map(i => {
+      const issued = i.issued || i.auctionDate;
+      const days = (issued && i.maturity)
+        ? Math.round((new Date(i.maturity) - new Date(issued)) / 86400000)
+        : (i.tenorYrs != null ? Math.round(i.tenorYrs * 365.25) : null);
+      // For zero-coupon bills, derive price/yields from known auction yield if present
+      let calc = null;
+      if (Number.isFinite(i.coupon) && days != null && i.coupon > 0) {
+        // Some Bills come back with the high investment rate populated as "coupon" — that's a BEY proxy
+        calc = mmFromBEY(i.coupon / 100, days);
+      }
+      return {
+        source: i.source,
+        cusip: i.cusip,
+        issuer: i.issuer,
+        type: i.type,
+        series: i.series,
+        issued, maturity: i.maturity,
+        days,
+        tenorYrs: i.tenorYrs,
+        size: i.size,
+        sizeLabel: i.sizeLabel,
+        beyPct: calc ? +(calc.bey * 100).toFixed(3) : null,
+        mmyPct: calc ? +(calc.mmy * 100).toFixed(3) : null,
+        discountRatePct: calc ? +(calc.discountRate * 100).toFixed(3) : null,
+        pricePer100: calc ? calc.price : null,
+        upcoming: !!i.upcoming,
+      };
+    })
+    .sort((a, b) => (a.days ?? 999) - (b.days ?? 999));
+  // Only ship rows where we have at least one computed yield — empty "—" rows
+  // are noise (floaters with no fixed-rate equivalent, or pre-auction T-bills
+  // where the high-yield isn't published yet).
+  const items = itemsRaw.filter(i => i.beyPct != null);
+  res.json({
+    items,
+    omitted: itemsRaw.length - items.length,
+    sources: ['TreasuryDirect (T-bills)', 'FHLB OF (term debt where ≤12mo)', 'FFCB (term debt where ≤12mo)'],
+    notes: {
+      conventions: 'Discount Rate = Act/360 on face; Money Market Yield (MMY) = Act/360 on price; Bond Equivalent Yield (BEY) = Act/365 on price.',
+    },
+    updatedAt: new Date().toISOString(),
+  });
 });
 
 // Public: Yield calculator (YTM, YTC, YTW, full call schedule)
@@ -1236,12 +1563,13 @@ app.post('/api/yield/calculate', (req, res) => {
 });
 
 // ─── Market-color (client-facing): per-asset-class blurbs + cross-border ────
-async function generateMarketColorBlurb(prompt) {
+async function generateMarketColorBlurb(prompt, attempt = 1) {
   if (!ANTHROPIC_API_KEY || ANTHROPIC_API_KEY.startsWith('YOUR_')) {
     console.warn('[mc] No Anthropic API key — synthesis disabled');
     return null;
   }
   try {
+    // 90s timeout — Claude synthesis with this prompt typically takes 30-60s
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -1250,21 +1578,34 @@ async function generateMarketColorBlurb(prompt) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 5000,
+        model: ANTHROPIC_MODEL_MARKET_COLOR,
+        max_tokens: 5000,        // structured response with 5 asset blurbs + 3 CB outlooks + overnight + economic + tradeIdeas needs the room
         messages: [{ role: 'user', content: prompt }],
       }),
+      timeout: 180000,           // 3 min — Claude streams full output in ~60-90s typical
     });
     const data = await res.json();
     if (data.error) {
       console.error('[mc] Claude API error:', data.error.type, data.error.message);
+      // Retry once on rate-limit / overload
+      if (attempt < 2 && (data.error.type === 'overloaded_error' || data.error.type === 'rate_limit_error')) {
+        await new Promise(r => setTimeout(r, 5000));
+        return generateMarketColorBlurb(prompt, attempt + 1);
+      }
       return null;
     }
     const text = data?.content?.[0]?.text?.trim();
     if (!text) console.warn('[mc] Claude returned empty content:', JSON.stringify(data).slice(0, 200));
     return text || null;
   } catch (e) {
-    console.error('[mc] Claude blurb call threw:', e.message);
+    // Auto-retry once on transient network errors (ETIMEDOUT / ECONNRESET / network timeout)
+    const transient = /ETIMEDOUT|ECONNRESET|network timeout|EAI_AGAIN|socket hang up/i.test(e.message || '');
+    if (transient && attempt < 2) {
+      console.warn(`[mc] Claude transient error (try ${attempt}): ${e.message} — retrying once`);
+      await new Promise(r => setTimeout(r, 3000));
+      return generateMarketColorBlurb(prompt, attempt + 1);
+    }
+    console.error('[mc] Claude blurb call failed:', e.message);
     return null;
   }
 }
@@ -1279,6 +1620,10 @@ const ASSET_CLASS_DEFS = [
 ];
 
 async function buildMarketColor() {
+  if (DISABLE_AI) {
+    console.log('[mc] DISABLE_AI=1 — skipping Claude call');
+    return { synthesis: null, generatedAt: new Date().toISOString(), disabled: true };
+  }
   // Fan-out to ensure all live data is fresh
   if (!cache.curve) await fetchCurve();
   if (!cache.spreads) await fetchSpreads();
@@ -1289,6 +1634,7 @@ async function buildMarketColor() {
   if (!cache.cbNews) await fetchCentralBankNews();
   if (!cache.marketNews) await fetchMarketNews();
   if (!cache.risk) await fetchRiskIndicators();
+  if (!cache.fx) await fetchFxRates();
 
   const fwds = computeImpliedForwards();
   const ust10 = cache.curve?.['10yr'];
@@ -1472,8 +1818,9 @@ Schema:
     "ecb":  { "stance": "...", "implied": "...", "watch": "..." },
     "boe":  { "stance": "...", "implied": "...", "watch": "..." }
   },
-  "overnightColor": "3-4 sentences of overnight bond-market color for a US sales desk reading this at the open. Cite the actual 1-day moves in 'overnight.ustChg1d' and 'overnight.ecbChg1d' (in bps). Mention any specific recent ECB / BoE / Fed press item from cbNewsRecent. If 'riskIndicators' shows a meaningful overnight move in oil (Brent / WTI), gold, or VIX, name it. If 'marketNewsRecent' contains a headline about geopolitics, war / Middle East / blockades, energy supply, election, or a major data print that plausibly drove the move, name it explicitly using the actual headline title. End with one sentence on cross-border relative value (US 10y vs Eurozone 10y). Plain English.",
-  "economicOutlook": "5-7 sentences on the broader US economic outlook for a non-specialist client. Cover, in this order: (a) where growth and the labor market actually are based on the economic indicators provided (cite specific numbers — CPI, PCE, unemployment, NFP, GDP); (b) what the curve and forwards say the Fed is expected to do; (c) any GEOPOLITICAL or EVENT-DRIVEN risk that's currently in 'marketNewsRecent' — explicitly name the events (war in the Middle East, blockades, sanctions, energy supply disruptions, elections, fiscal/debt-ceiling fights, trade actions) IF they appear in the headlines provided, and explain how they could affect the rate path or inflation; (d) the supporting numbers from 'riskIndicators' (oil prices, gold, VIX, 10y breakevens) that confirm or contradict that risk; (e) net takeaway for a fixed income investor. Plain English, no jargon. Do not invent events not in the headlines provided."
+  "overnightColor": "3-4 sentences of overnight bond-market color for a US sales desk reading this at the open. Cite the actual 1-day moves in 'overnight.ustChg1d' and 'overnight.ecbChg1d' (in bps). Mention any specific recent ECB / BoE / Fed press item from cbNewsRecent. If 'riskIndicators' shows a meaningful overnight move in oil (Brent / WTI), gold, or MOVE, name it. If 'marketNewsRecent' contains a headline about geopolitics, war / Middle East / blockades, energy supply, election, or a major data print that plausibly drove the move, name it explicitly using the actual headline title. End with one sentence on cross-border relative value (US 10y vs Eurozone 10y). Plain English.",
+  "economicOutlook": "5-7 sentences on the broader US economic outlook for a non-specialist client. Cover, in this order: (a) where growth and the labor market actually are based on the economic indicators provided (cite specific numbers — CPI, PCE, unemployment, NFP, GDP); (b) what the curve and forwards say the Fed is expected to do; (c) any GEOPOLITICAL or EVENT-DRIVEN risk that's currently in 'marketNewsRecent' — explicitly name the events (war in the Middle East, blockades, sanctions, energy supply disruptions, elections, fiscal/debt-ceiling fights, trade actions) IF they appear in the headlines provided, and explain how they could affect the rate path or inflation; (d) the supporting numbers from 'riskIndicators' (oil prices, gold, MOVE, 10y breakevens) that confirm or contradict that risk; (e) net takeaway for a fixed income investor. Plain English, no jargon. Do not invent events not in the headlines provided.",
+  "tradeIdeas": "Write this as a senior sales trader to their team. INTERNAL-FACING — be opinionated and specific, not balanced. Produce 3-5 numbered trade ideas in this exact JSON-array form inside the string (one entry per line, separated by '\\n'): '1) <trade>: <thesis with specific bps numbers>. Risk: <one sentence>.' Each idea must reference real numbers from the data (curve, OAS by maturity bucket, quality OAS by rating, forwards, oil/MOVE/breakevens, cross-border). At least one idea should be a relative-value pair trade (e.g., long X / short Y) citing the spread differential. At least one should reference a specific catalyst from marketNewsRecent or upcoming central-bank events. At least one should call out where the desk has natural axe given current FHLB / FFCB / Treasury new-issue characteristics if that's visible. Be concrete: 'Buy 5-7y IG at +80bp vs sell 10-15y IG at +92bp — 12bp roll-down + tighter percentile makes this a 6-8bp pickup over 3 months' rather than 'IG looks attractive'. End with a one-line bottom-line takeaway prefixed 'BOTTOM LINE:'."
 }
 
 DATA:
@@ -1559,18 +1906,237 @@ async function getMarketColor(force = false) {
   return marketColorCache.data;
 }
 
-app.get('/api/public/market-color', async (_req, res) => {
-  const data = await getMarketColor(false);
-  res.json(data);
+// Strip internal-only fields (tradeIdeas) from synthesis before returning publicly.
+function stripInternalSynthesis(mc) {
+  if (!mc) return mc;
+  const out = { ...mc };
+  if (mc.synthesis) {
+    const { tradeIdeas, ...rest } = mc.synthesis;
+    out.synthesis = rest;
+  }
+  return out;
+}
+
+// GETs are non-blocking — serve cache, populate in background if cold.
+// (The POST refresh below is intentionally blocking — explicit user action.)
+function _bgPopulateMarketColor() {
+  if (marketColorCache.populating) {
+    // Defensive: clear stuck flag if stuck > 5 minutes
+    if (marketColorCache.populatingSince &&
+        Date.now() - marketColorCache.populatingSince > 5 * 60 * 1000) {
+      console.warn('[mc] populating flag stuck > 5 min — clearing and retrying');
+      marketColorCache.populating = false;
+    } else {
+      return;
+    }
+  }
+  marketColorCache.populating = true;
+  marketColorCache.populatingSince = Date.now();
+  console.log('[mc] starting buildMarketColor...');
+  // Hard outer timeout so we can never hang indefinitely even if Claude socket dangles
+  const HARD_TIMEOUT_MS = 4 * 60 * 1000;
+  Promise.race([
+    buildMarketColor(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('outer hard timeout (4min)')), HARD_TIMEOUT_MS)),
+  ])
+    .then(d => {
+      console.log('[mc] buildMarketColor finished, synthesis:', d?.synthesis ? 'present' : 'null');
+      marketColorCache.data = d;
+      marketColorCache.updatedAt = new Date().toISOString();
+    })
+    .catch(e => console.warn('[mc] background populate failed:', e.message))
+    .finally(() => {
+      marketColorCache.populating = false;
+      marketColorCache.populatingSince = null;
+    });
+}
+app.get('/api/public/market-color', (_req, res) => {
+  if (!marketColorCache.data) _bgPopulateMarketColor();
+  const data = marketColorCache.data || { synthesis: null, assets: [], crossBorder: [], updatedAt: null, stale: true };
+  res.json(stripInternalSynthesis(data));
 });
-app.post('/api/internal/market-color/refresh', requireInternal, async (_req, res) => {
-  const data = await getMarketColor(true);
-  res.json(data);
+app.get('/api/internal/market-color', requireInternal, (_req, res) => {
+  if (!marketColorCache.data) _bgPopulateMarketColor();
+  res.json(marketColorCache.data || { synthesis: null, assets: [], crossBorder: [], updatedAt: null, stale: true });
+});
+app.post('/api/internal/market-color/refresh', requireInternal, (_req, res) => {
+  // Kick off regeneration in background; return immediately with the previous cache.
+  // The frontend can poll /api/internal/market-color to see the new synthesis arrive.
+  _bgPopulateMarketColor();
+  res.json({
+    refreshing: true,
+    previous: marketColorCache.data || null,
+    note: 'Synthesis regenerating in background (typically 30–60s). Poll /api/internal/market-color for the updated payload.',
+  });
+});
+
+// ─── Public: MOVE index 1y history (sparkline + percentile) ─────────────────
+const _moveCache = { series: null, updatedAt: null, populating: false };
+function _bgPopulateMoveHistory() {
+  if (_moveCache.populating) return;
+  _moveCache.populating = true;
+  fetchYahooSeries('^MOVE', '1y')
+    .then(series => {
+      if (!series || !series.length) return;
+      _moveCache.series = series;
+      _moveCache.updatedAt = new Date().toISOString();
+    })
+    .catch(e => console.warn('[move-history] failed:', e.message))
+    .finally(() => { _moveCache.populating = false; });
+}
+app.get('/api/public/move/history', (_req, res) => {
+  const stale = !_moveCache.series || !_moveCache.updatedAt ||
+                (Date.now() - new Date(_moveCache.updatedAt)) > 6 * 3600 * 1000;
+  if (stale) _bgPopulateMoveHistory();
+  const series = _moveCache.series || [];
+  if (series.length === 0) {
+    return res.json({ series: [], stale: true, updatedAt: _moveCache.updatedAt });
+  }
+  const values = series.map(p => p.value);
+  const current = values[values.length - 1];
+  const sorted = [...values].sort((a, b) => a - b);
+  const lower = sorted.filter(v => v < current).length;
+  const pctRank = Math.round((lower / sorted.length) * 100);
+  res.json({
+    series,
+    current: +current.toFixed(2),
+    min1y: +sorted[0].toFixed(2),
+    max1y: +sorted[sorted.length - 1].toFixed(2),
+    avg1y: +(values.reduce((a, b) => a + b, 0) / values.length).toFixed(2),
+    pctRank1y: pctRank,
+    n: values.length,
+    updatedAt: _moveCache.updatedAt,
+  });
+});
+
+// ─── Client RFQs + Messages — in-memory queues for the demo (real product
+// needs persistence + per-client auth + WebSocket to the desk). Each queue is
+// a ring buffer capped at 200 items. Desk reads via /api/internal/* endpoints.
+let _rfqQueue = [];
+let _messageQueue = [];
+
+app.post('/api/client/rfq', (req, res) => {
+  const { cusip, issuer, size, settle, notes, clientName, clientEmail } = req.body || {};
+  if (!cusip) return res.status(400).json({ error: 'cusip required' });
+  const rfq = {
+    id: 'rfq-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+    cusip:       String(cusip).slice(0, 12),
+    issuer:      String(issuer || '').slice(0, 120),
+    size:        Number.isFinite(+size) ? +size : null,
+    settle:      String(settle || '').slice(0, 20) || null,
+    notes:       String(notes || '').slice(0, 500),
+    clientName:  String(clientName || '').slice(0, 100),
+    clientEmail: String(clientEmail || '').slice(0, 120),
+    receivedAt:  new Date().toISOString(),
+    status:      'pending',
+  };
+  _rfqQueue.unshift(rfq);
+  if (_rfqQueue.length > 200) _rfqQueue.length = 200;
+  console.log(`[rfq] ${rfq.id} cusip=${rfq.cusip} size=${rfq.size} from=${rfq.clientName || 'anon'}`);
+  res.json({ ok: true, id: rfq.id, receivedAt: rfq.receivedAt });
+});
+
+app.get('/api/internal/rfq/queue', requireInternal, (_req, res) => {
+  res.json({ items: _rfqQueue, count: _rfqQueue.length });
+});
+
+app.post('/api/client/messages', (req, res) => {
+  const { text, clientName, threadId } = req.body || {};
+  if (!text || !String(text).trim()) return res.status(400).json({ error: 'text required' });
+  const msg = {
+    id:        'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+    threadId:  String(threadId || 'default').slice(0, 60),
+    text:      String(text).trim().slice(0, 2000),
+    from:      String(clientName || 'client').slice(0, 100),
+    direction: 'inbound',
+    receivedAt: new Date().toISOString(),
+  };
+  _messageQueue.unshift(msg);
+  if (_messageQueue.length > 200) _messageQueue.length = 200;
+  console.log(`[messages] inbound from=${msg.from} text="${msg.text.slice(0, 80)}"`);
+  res.json({ ok: true, id: msg.id, receivedAt: msg.receivedAt });
+});
+
+app.get('/api/internal/messages/queue', requireInternal, (_req, res) => {
+  res.json({ items: _messageQueue, count: _messageQueue.length });
+});
+
+// SSE stream — clients subscribe to receive desk replies in real time.
+// Replies are broadcast to every connected client; we tag each with an
+// optional `to` field that the client filters on locally (defense in depth;
+// real product routes per-client via auth).
+const _sseClients = new Set();
+app.get('/api/client/messages/stream', (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+  });
+  // Initial comment forces the browser to commit the connection
+  res.write(': connected\n\n');
+  _sseClients.add(res);
+  req.on('close', () => { _sseClients.delete(res); });
+});
+function _broadcastDeskMessage(msg) {
+  const payload = `data: ${JSON.stringify(msg)}\n\n`;
+  for (const r of _sseClients) {
+    try { r.write(payload); } catch { _sseClients.delete(r); }
+  }
+}
+
+app.post('/api/internal/messages/reply', requireInternal, (req, res) => {
+  const { text, to, replyTo } = req.body || {};
+  if (!text || !String(text).trim()) return res.status(400).json({ error: 'text required' });
+  const msg = {
+    id: 'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+    text: String(text).trim().slice(0, 2000),
+    from: 'Spread Desk',
+    to: String(to || '').slice(0, 100) || null,   // null = broadcast
+    replyTo: replyTo || null,
+    direction: 'outbound',
+    sentAt: new Date().toISOString(),
+  };
+  _messageQueue.unshift(msg);
+  if (_messageQueue.length > 200) _messageQueue.length = 200;
+  _broadcastDeskMessage(msg);
+  console.log(`[messages] desk reply to=${msg.to||'*'} text="${msg.text.slice(0,80)}"`);
+  res.json({ ok: true, id: msg.id, recipients: _sseClients.size });
+});
+
+// Update RFQ status (desk acks / quotes / declines)
+app.post('/api/internal/rfq/update', requireInternal, (req, res) => {
+  const { id, status, note } = req.body || {};
+  const r = _rfqQueue.find(x => x.id === id);
+  if (!r) return res.status(404).json({ error: 'not found' });
+  if (status) r.status = String(status).slice(0, 30);
+  if (note)   r.deskNote = String(note).slice(0, 500);
+  r.updatedAt = new Date().toISOString();
+  // Push a chat-style notice so the client sees their RFQ moved
+  _broadcastDeskMessage({
+    id:      'msg-rfq-' + Date.now(),
+    text:    `RFQ ${r.id.slice(0,12)} (${r.cusip}) → ${r.status}${note ? ': ' + note : ''}`,
+    from:    'Spread Desk',
+    to:      r.clientName || null,
+    direction: 'outbound',
+    sentAt:  new Date().toISOString(),
+  });
+  res.json({ ok: true });
+});
+
+// ─── Public: FX spot rates (USD per unit of foreign currency, plus inverse) ───
+// NEVER blocks on FRED — serves whatever is in cache; populates in background on cold start.
+app.get('/api/public/fx', (_req, res) => {
+  if (!cache.fx) {
+    cache.fx = {};
+    fetchFxRates().catch(e => console.warn('[fx] background populate failed:', e.message));
+  }
+  res.json({ rates: cache.fx, updatedAt: cache.fxUpdated, stale: !cache.fxUpdated });
 });
 
 // ─── Public: client-facing inventory (no markup, no dealer cost) ─────────────
-app.get('/api/public/inventory', async (req, res) => {
-  const internalProducts = await buildInternalProducts();
+app.get('/api/public/inventory', (req, res) => {
+  // buildInternalProducts is now sync — works on cached curve+spreads, triggers bg refresh if cold
+  const internalProducts = buildInternalProducts();
   // Strip everything that's internal-desk-only: markup, dealer $/bond, street ranges
   const products = internalProducts.map(p => ({
     id: p.id,
@@ -1599,8 +2165,9 @@ app.get('/api/public/inventory', async (req, res) => {
     })),
   }));
 
-  // Real per-CUSIP offerings: today's FHLB settlements + upcoming Treasury auctions
-  const issues = await fetchAllNewIssues();
+  // Real per-CUSIP offerings: served from cache, populated in background if cold
+  if (!newIssuesCache.items) _bgPopulateNewIssues();
+  const issues = newIssuesCache.items || [];
   const offerings = issues.map(i => ({
     source: i.source,
     cusip: i.cusip,
@@ -1628,9 +2195,20 @@ app.get('/api/public/inventory', async (req, res) => {
     customerYieldLabel: Number.isFinite(i.coupon) ? `${i.coupon.toFixed(2)}%` : 'TBD',
   }));
 
+  // Curated default: top 15 by spread (settling today first, then upcoming).
+  // Full list returns via ?view=all (used by the Phase-2 "Browse all" tab).
+  const showAll = req.query.view === 'all';
+  const offeringsSorted = [...offerings].sort((a, b) => {
+    if ((a.upcoming?1:0) !== (b.upcoming?1:0)) return (a.upcoming?1:0) - (b.upcoming?1:0);
+    return (b.spreadBps ?? -999) - (a.spreadBps ?? -999);
+  });
+  const offeringsView = showAll ? offeringsSorted : offeringsSorted.slice(0, 15);
+
   res.json({
     products,
-    offerings,
+    offerings: offeringsView,
+    offeringsTotal: offerings.length,
+    offeringsView: showAll ? 'all' : 'curated',
     curve: cache.curve,
     sources: ['FHLB Office of Finance', 'TreasuryDirect', 'FRED ICE BofA OAS', 'FRED Treasury CMT'],
     updatedAt: new Date().toISOString(),
@@ -1639,8 +2217,8 @@ app.get('/api/public/inventory', async (req, res) => {
 });
 
 // Internal only: full spread + markup reference data
-app.get('/api/internal/products', requireInternal, async (req, res) => {
-  const products = await buildInternalProducts();
+app.get('/api/internal/products', requireInternal, (req, res) => {
+  const products = buildInternalProducts();  // sync, cache-only
   res.json({ products, updatedAt: new Date().toISOString(), spreads: cache.spreads });
 });
 
@@ -1715,14 +2293,20 @@ async function buildTracePrints() {
   return [...tsy, ...corps];
 }
 
-app.get('/api/internal/trace', requireInternal, async (req, res) => {
+let _tracePopulating = false;
+function _bgPopulateTrace() {
+  if (_tracePopulating) return;
+  _tracePopulating = true;
+  buildTracePrints()
+    .then(t => { cache.trace = t; cache.traceUpdated = new Date().toISOString(); })
+    .catch(e => console.warn('[trace] background populate failed:', e.message))
+    .finally(() => { _tracePopulating = false; });
+}
+app.get('/api/internal/trace', requireInternal, (req, res) => {
   const stale = !cache.trace || !cache.traceUpdated ||
                 (Date.now() - new Date(cache.traceUpdated)) > 600000;
-  if (stale) {
-    cache.trace = await buildTracePrints();
-    cache.traceUpdated = new Date().toISOString();
-  }
-  res.json({ items: cache.trace, updatedAt: cache.traceUpdated });
+  if (stale) _bgPopulateTrace();
+  res.json({ items: cache.trace || [], updatedAt: cache.traceUpdated, stale: !cache.traceUpdated });
 });
 
 // Internal only: force refresh outlook
@@ -1737,6 +2321,14 @@ app.get('/api/internal/econ/full', requireInternal, async (req, res) => {
   if (!cache.economicData) await fetchEconomicData();
   res.json({ data: cache.economicData, curve: cache.curve, updatedAt: cache.economicUpdated });
 });
+
+// ─── Agency New Issue Analytics (internal-only module) ───────────────────────
+const agencyDb = require('./agency-analytics/server/db');
+const agencyAuth = require('./agency-analytics/server/auth');
+const agencyIngest = require('./agency-analytics/server/ingest');
+app.use('/api/internal/agency', require('./agency-analytics/server/routes'));
+app.use('/api/internal/agency', require('./agency-analytics/server/desk-routes'));
+app.get('/agency', (_req, res) => res.sendFile(path.join(__dirname, 'agency-analytics', 'public', 'desk.html')));
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
@@ -1753,6 +2345,7 @@ cron.schedule('0 * * * *', async () => {
   await fetchCentralBankNews();
   await fetchMarketNews();
   await fetchRiskIndicators();
+  await fetchFxRates();
 });
 
 // Refresh AI-generated market color blurbs once per day (Claude cost control)
@@ -1763,6 +2356,25 @@ cron.schedule('0 7 * * *', async () => {
 cron.schedule('0 6 * * 1', async () => {
   await generateOutlook();
 });
+
+// Agency module — daily market snapshot at 4pm ET, new-issue scan at 5pm ET
+cron.schedule('0 16 * * 1-5', async () => {
+  try { await agencyIngest.ingestMarketSnapshot(); }
+  catch (e) { console.error('[agency.cron] market snapshot failed:', e.message); }
+}, { timezone: 'America/New_York' });
+
+cron.schedule('0 17 * * 1-5', async () => {
+  try { await agencyIngest.ingestNewIssues(); }
+  catch (e) { console.error('[agency.cron] new-issues failed:', e.message); }
+}, { timezone: 'America/New_York' });
+
+// Pre-pricing announcements (FHLB callable bond auctions appear ~9:45 ET).
+// Poll every 15 min between 9–11 ET on weekdays to catch announcements and
+// late updates before the auction closes at 10:30 ET.
+cron.schedule('*/15 9-10 * * 1-5', async () => {
+  try { await agencyIngest.ingestPendingAuctions(); }
+  catch (e) { console.error('[agency.cron] pending-auctions failed:', e.message); }
+}, { timezone: 'America/New_York' });
 
 // ─── Initial data load on startup ─────────────────────────────────────────────
 (async () => {
@@ -1777,7 +2389,28 @@ cron.schedule('0 6 * * 1', async () => {
   await fetchCentralBankNews();
   await fetchMarketNews();
   await fetchRiskIndicators();
-  await generateOutlook();
+  await fetchFxRates();
+  // Preload the heavier caches so the first user request after login is instant
+  console.log('[startup] Preloading new-issue + trace + market-color caches...');
+  newIssuesCache.items = await fetchAllNewIssues();
+  newIssuesCache.updatedAt = new Date().toISOString();
+  cache.trace = await buildTracePrints();
+  cache.traceUpdated = new Date().toISOString();
+  // Outlook + market color are NOT preloaded on startup anymore — they were
+  // running on every restart at ~$0.30 each, racking up dev costs.
+  // They now lazy-load on first user request (and refresh via the cron schedule:
+  // weekly outlook, daily market color at 7 AM ET).
+
+  // Agency module: connect to Google Sheets, seed users, do not block startup on failure
+  try {
+    await agencyDb.init();
+    await agencyAuth.ensureUsersSheetSeeded();
+    console.log('[startup] Agency analytics module ready.');
+  } catch (e) {
+    console.error('[startup] Agency analytics module failed to init:', e.message);
+    console.error('[startup]   (server will continue without it — see SHEETS_SETUP.md)');
+  }
+
   console.log('[startup] Ready.');
 })();
 
