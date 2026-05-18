@@ -734,11 +734,13 @@ async function predictIndication(input) {
   if (!solvedMid || !solvedMid.ok) {
     return { ok: false, errors: [`coupon solver failed: ${solvedMid ? solvedMid.error : 'no result'}`] };
   }
-  const couponMid = solvedMid.coupon_pct;
-  const couponLow  = Math.round((couponMid - 0.015) * 1000) / 1000;
-  const couponHigh = Math.round((couponMid + 0.015) * 1000) / 1000;
-  const couponAggressive = (solvedAgg && solvedAgg.ok) ? solvedAgg.coupon_pct : null;
-  const couponCheap      = (solvedCheap && solvedCheap.ok) ? solvedCheap.coupon_pct : null;
+  // Round to nearest 1 bp (0.01%) — matches how agency coupons quote.
+  const _r2 = (v) => Math.round(v * 100) / 100;
+  const couponMid  = _r2(solvedMid.coupon_pct);
+  const couponLow  = _r2(couponMid - 0.01);
+  const couponHigh = _r2(couponMid + 0.01);
+  const couponAggressive = (solvedAgg && solvedAgg.ok) ? _r2(solvedAgg.coupon_pct) : null;
+  const couponCheap      = (solvedCheap && solvedCheap.ok) ? _r2(solvedCheap.coupon_pct) : null;
 
   // Speed score at the *predicted* funding spread, using post-print signals
   // from comparables when available.
