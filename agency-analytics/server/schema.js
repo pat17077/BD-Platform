@@ -54,7 +54,7 @@ const SCHEMA = {
   pending_auctions: [
     'trade_date', 'bids_due_et', 'source', 'structure', 'settle_date',
     'maturity_date', 'first_call_date', 'next_pay_date', 'par_mm',
-    'benchmark_desc', 'coupon', 'ingested_at',
+    'benchmark_desc', 'coupon', 'yel', 'ingested_at',
   ],
 
   indications: [

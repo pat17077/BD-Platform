@@ -671,12 +671,19 @@ async function refreshPending() {
       const t = p.bids_due_et ? ` · ${p.bids_due_et} ET` : '';
       const cpn = p.coupon ? ` · cpn ${p.coupon}%` : '';
       const dkey = `${p.source}|${p.structure}|${p.trade_date}|${p.settle_date}`;
+      const yelChecked = p.yel === 'Y' ? 'checked' : '';
       div.innerHTML = `
         <div><strong>${p.source} ${p.structure}</strong>${matchedTag}</div>
         <div style="color:var(--muted); font-size:11px;">trade ${_fmtUS(p.trade_date)}${t} · settle ${_fmtUS(p.settle_date)} · par $${p.par_mm || '?'}MM${cpn}</div>
-        <div style="margin-top:4px; display:flex; gap:6px; flex-wrap:wrap;">
+        <div style="margin-top:4px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <label style="font-size:11px; display:flex; gap:4px; align-items:center;">
+            <input type="checkbox" class="pend-yel-toggle" data-dkey="${dkey}" ${yelChecked} title="Mark as YEL — re-runs the indication with YEL pricing adjustment" />
+            <span>YEL</span>
+            <span class="pend-yel-status" data-dkey="${dkey}" style="color:var(--muted); font-size:10px;"></span>
+          </label>
           <button class="secondary" data-dkey="${dkey}" data-action="edit-pending" style="font-size:10px; padding:2px 6px;">Edit ↓</button>
           <button class="secondary" data-dkey="${dkey}" data-action="result-pending" style="font-size:10px; padding:2px 6px;">Enter result ↓</button>
+          <button class="secondary" data-dkey="${dkey}" data-action="mark-dnt" style="font-size:10px; padding:2px 6px; color:var(--warn);" title="Mark as Did Not Trade (DNT)">DNT</button>
           <button class="secondary" data-dkey="${dkey}" data-action="del-pending" style="font-size:10px; padding:2px 6px; color:var(--bad);" title="Remove this tentative (also removes the auto-spawned indication)">Delete</button>
         </div>
         <div class="pend-result" data-dkey="${dkey}" style="display:none; margin-top:8px; padding:8px; background:#fffbeb; border:1px solid #f0d674; border-radius:4px;">
@@ -724,6 +731,65 @@ async function refreshPending() {
         try {
           const r = await fetch(`${API}/pending?${qs}`, { method: 'DELETE', headers: { Authorization: `Bearer ${getToken()}` } });
           if (!r.ok) { alert('delete failed'); return; }
+          refreshPending();
+          if (typeof loadIndications === 'function') loadIndications();
+        } catch (e) { alert('error: ' + e.message); }
+      };
+    });
+    // YEL toggle: PATCH /pending/yel — re-spawns the indication with new YEL flag
+    list.querySelectorAll('.pend-yel-toggle').forEach((cb) => {
+      cb.onchange = async () => {
+        const [issuer, structure, trade_date, settle_date] = cb.dataset.dkey.split('|');
+        const status = list.querySelector(`.pend-yel-status[data-dkey="${cb.dataset.dkey}"]`);
+        if (status) { status.style.color = 'var(--muted)'; status.textContent = '…'; }
+        try {
+          const r = await fetch(`${API}/pending/yel`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+            body: JSON.stringify({ issuer, structure, trade_date, settle_date, yel: cb.checked ? 'Y' : '' }),
+          });
+          if (!r.ok) {
+            if (status) { status.style.color = 'var(--bad)'; status.textContent = 'err'; }
+            cb.checked = !cb.checked;  // revert
+            return;
+          }
+          const j = await r.json();
+          if (status) {
+            status.style.color = 'var(--good)';
+            status.textContent = j.indication?.created ? '✓ ind respawned' : '✓ saved';
+            setTimeout(() => { status.textContent = ''; }, 1500);
+          }
+          if (typeof loadIndications === 'function') loadIndications();
+        } catch (e) {
+          if (status) { status.style.color = 'var(--bad)'; status.textContent = 'err'; }
+          cb.checked = !cb.checked;
+        }
+      };
+    });
+    // One-click DNT
+    list.querySelectorAll('button[data-action="mark-dnt"]').forEach((btn) => {
+      btn.onclick = async () => {
+        const [issuer, structure, trade_date, settle_date] = btn.dataset.dkey.split('|');
+        if (!confirm(`Mark ${issuer} ${structure} (settle ${_fmtUS(settle_date)}) as DNT?`)) return;
+        // Pull current YEL state from the row's checkbox and par from the visible row text
+        const yelCb = list.querySelector(`.pend-yel-toggle[data-dkey="${btn.dataset.dkey}"]`);
+        const yel = yelCb && yelCb.checked ? 'Y' : '';
+        try {
+          // Also include today's snapshot move/s5s30s if available
+          const snap = document.getElementById('snapField') ? {} : {};
+          const moveEl = document.querySelector('.snapField[data-field="move"]');
+          const s5s30sEl = document.querySelector('.snapField[data-field="s5s30s"]');
+          const r = await fetch(`${API}/desk/mark-dnt`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+            body: JSON.stringify({
+              issuer, structure, trade_date, settle_date, yel,
+              move:   moveEl   ? moveEl.value : '',
+              s5s30s: s5s30sEl ? s5s30sEl.value : '',
+            }),
+          });
+          const j = await r.json();
+          if (!r.ok) { alert('DNT failed: ' + (j.error || r.status)); return; }
           refreshPending();
           if (typeof loadIndications === 'function') loadIndications();
         } catch (e) { alert('error: ' + e.message); }

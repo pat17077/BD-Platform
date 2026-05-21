@@ -303,6 +303,98 @@ router.post('/pending/add', auth.requireAgencyAuth, async (req, res) => {
   }
 });
 
+// One-click DNT — marks an auction as Did Not Trade. Creates an issues row
+// with coupon='', fees='DNT', and matches any open indication for the same
+// (issuer, structure, settle_date).
+router.post('/desk/mark-dnt', auth.requireAgencyAuth, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const issuer = (b.issuer || '').toUpperCase();
+    if (issuer !== 'FHLB' && issuer !== 'FFCB') throw new Error('issuer must be FHLB or FFCB');
+    if (!b.structure || !b.settle_date) throw new Error('structure + settle_date required');
+    const parsed = _parseStruct(b.structure);
+    if (!parsed) throw new Error('bad structure: ' + b.structure);
+    const tradeDate = b.trade_date || _todayIso();
+    const maturity = b.maturity_date || _addYears(b.settle_date, parsed.tenorYrs);
+    const firstCall = b.first_call_date || _addMonths(b.settle_date, parsed.callMonths);
+    const cusip = `PENDING-${issuer}-${tradeDate.replace(/-/g,'')}-${b.structure.replace(/\//g,'')}-DNT`;
+    const now = new Date().toISOString();
+    const row = {
+      cusip,
+      pricing_date: tradeDate,
+      issuer,
+      structure: b.structure,
+      size: b.size_mm || '',
+      coupon: '',
+      fees: 'DNT',
+      yel: b.yel === 'Y' ? 'Y' : '',
+      settle_date: b.settle_date,
+      maturity_date: maturity,
+      first_call_date: firstCall,
+      move:   b.move   || '',
+      s5s30s: b.s5s30s || '',
+      desk_notes: 'DNT — did not trade',
+      entered_by: req.agencyUser,
+      data_classification: 'internal',
+      ingested_at: now,
+      version: 1,
+    };
+    await db.upsertRow('issues', row);
+    // Match open indication for this (issuer, structure, settle_date)
+    const inds = db.getRows('indications').filter((r) =>
+      r.status === 'open' && (!r.actual_cusip || r.actual_cusip === '') &&
+      r.issuer === issuer && r.structure === b.structure && r.settle_date === b.settle_date
+    );
+    let matched = 0;
+    for (const ind of inds) {
+      await db.upsertRow('indications', {
+        ...ind,
+        actual_cusip: cusip,
+        actual_coupon: 'DNT',
+        actual_funding_spread: '',
+        gap_bp: '',
+        updated_at: now,
+      });
+      matched++;
+    }
+    res.json({ ok: true, cusip, indications_matched: matched });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// Toggle YEL flag on a pending row. Deletes any existing open indication for
+// the same (issuer, structure, settle_date) and re-spawns it with the new YEL
+// so the prediction reflects the YEL fees+funding adjustment.
+router.patch('/pending/yel', auth.requireAgencyAuth, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const issuer = (b.issuer || '').toUpperCase();
+    const { structure, trade_date, settle_date, yel } = b;
+    if (!issuer || !structure || !trade_date || !settle_date) {
+      return res.status(400).json({ error: 'issuer, structure, trade_date, settle_date required' });
+    }
+    const row = db.getRows('pending_auctions').find((r) =>
+      r.source === issuer && r.structure === structure &&
+      r.trade_date === trade_date && r.settle_date === settle_date
+    );
+    if (!row) return res.status(404).json({ error: 'pending row not found' });
+    row.yel = yel === 'Y' ? 'Y' : '';
+    await db.upsertRow('pending_auctions', row);
+    // Delete existing open indication so it gets re-spawned with the new YEL.
+    await db.deleteWhere('indications', (r) =>
+      r.status === 'open' && r.issuer === issuer &&
+      r.structure === structure && r.settle_date === settle_date
+    );
+    let indication = null;
+    try { indication = await autoCreateIndicationFromPending(row, req.agencyUser); }
+    catch (e) { console.warn('[pending/yel] auto-indication failed:', e.message); }
+    res.json({ ok: true, yel: row.yel, indication });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Delete a pending row by composite key (issuer + structure + trade_date + settle_date).
 // Also removes the auto-spawned indication if one exists for the same triple.
 router.delete('/pending', auth.requireAgencyAuth, async (req, res) => {
@@ -873,7 +965,7 @@ async function autoCreateIndicationFromPending(pendingRow, username) {
   const size_mm = parseFloat(pendingRow.par_mm) || 25;  // default size when issuer doesn't disclose
   const result = await predictIndication({
     issuer, structure, settle_date,
-    yel: '',  // YEL not known at tentative time; user can edit later
+    yel: pendingRow.yel === 'Y' ? 'Y' : '',
     size_mm,
   });
   if (!result.ok) return { skipped: 'predict failed: ' + (result.errors || []).join('; ') };
