@@ -1575,6 +1575,21 @@ function initApp() {
   renderNIM2();
 }
 
+// Auto-bypass the legacy in-page login screen. The server's cookie-based
+// auth (desk-auth.js) already gates GET / — any browser that reaches this
+// JS is authorized as `desk`, so no second login is needed.
+(function () {
+  const onReady = () => {
+    const ls = document.getElementById('login-screen');
+    const app = document.getElementById('app');
+    if (ls) ls.style.display = 'none';
+    if (app) app.style.display = 'block';
+    if (typeof initApp === 'function') initApp();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', onReady);
+  else onReady();
+})();
+
 </script>
 </body>
 </html>
