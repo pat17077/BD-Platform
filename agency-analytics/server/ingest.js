@@ -602,6 +602,32 @@ async function ingestNewIssues() {
     console.warn('[agency.ingest] indication match failed:', e.message);
   }
 
+  // Auto-reconcile PENDING- placeholders to their real-CUSIP counterparts.
+  // The CBR pull often arrives a day after the user typed a placeholder, so
+  // the matcher now tolerates pricing_date drift up to 5 days.
+  try {
+    const { reconcilePlaceholders } = require('./desk-routes');
+    if (typeof reconcilePlaceholders === 'function') {
+      const rec = await reconcilePlaceholders();
+      if (rec && rec.matched) summary.placeholders_reconciled = rec.matched;
+    }
+  } catch (e) {
+    console.warn('[agency.ingest] auto-reconcile failed:', e.message);
+  }
+
+  // Re-sort so newly-inserted/merged rows land in the right place
+  // (pricing_date ASC, issuer DESC, maturity_date ASC).
+  try {
+    await db.sortMulti('issues', [
+      { column: 'pricing_date',    direction: 'ASCENDING' },
+      { column: 'issuer',          direction: 'DESCENDING' },
+      { column: 'pricing_time_et', direction: 'ASCENDING' },
+      { column: 'maturity_date',   direction: 'ASCENDING' },
+    ]);
+  } catch (e) {
+    console.warn('[agency.ingest] re-sort failed:', e.message);
+  }
+
   await db.audit('(cron)', 'ingest_new_issues', summary);
   console.log('[agency.ingest] new-issues:', summary);
   return summary;

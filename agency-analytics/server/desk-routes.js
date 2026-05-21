@@ -663,14 +663,23 @@ async function reconcilePlaceholders() {
   if (!placeholders.length) return { matched: 0, scanned: 0 };
   let matched = 0;
   for (const p of placeholders) {
+    // Match on (issuer, structure, settle_date, coupon). pricing_date is
+    // allowed to drift up to 5 days (the user-entered placeholder is often
+    // stamped yesterday while CBR shows today). When merging, the user's
+    // pricing_date wins (it's the actual trade date).
+    const _absDays = (a, b) => {
+      if (!a || !b) return 999;
+      const da = new Date(a + 'T00:00:00Z'), db = new Date(b + 'T00:00:00Z');
+      return Math.abs((da - db) / (1000 * 60 * 60 * 24));
+    };
     const same = issues.find((r) =>
       r !== p &&
       !r.cusip.startsWith('PENDING-') &&
       r.issuer === p.issuer &&
-      r.pricing_date === p.pricing_date &&
       r.settle_date === p.settle_date &&
       String(r.coupon) === String(p.coupon) &&
-      r.structure === p.structure
+      r.structure === p.structure &&
+      _absDays(r.pricing_date, p.pricing_date) <= 5
     );
     if (same) {
       // Placeholder data is the source of truth for everything the user filled.
@@ -688,6 +697,9 @@ async function reconcilePlaceholders() {
       for (const k of USER_FIELDS) {
         if (p[k] !== '' && p[k] != null) merged[k] = p[k];
       }
+      // User-entered pricing_date wins over CBR's auto-stamp (the user typed
+      // the actual trade date).
+      if (p.pricing_date) merged.pricing_date = p.pricing_date;
       await db.upsertRow('issues', merged);
       await db.deleteWhere('issues', (r) => r.cusip === p.cusip);
       await db.audit('(reconcile)', 'cusip_match', { from: p.cusip, to: same.cusip });
