@@ -386,9 +386,12 @@ async function ingestNewIssues() {
                        || /NC\d/i.test(item.callStructure || '')
                        || /callable/i.test(item.type || '');
     if (!isCallable) { skipped++; continue; }
-    // Skip zero-coupon bonds — funding/OAS model assumes coupon-paying.
+    // Skip zero-coupon AND missing-coupon bonds. Both pollute the comparables
+    // pool (NaN funding spreads, broken sorts) — and a real callable agency
+    // print always has a coupon. DNT entries are added via the manual path
+    // with fees='DNT', not through this ingest.
     const couponNum = parseFloat(item.coupon);
-    if (isFinite(couponNum) && couponNum === 0) { skipped++; continue; }
+    if (!isFinite(couponNum) || couponNum <= 0) { skipped++; continue; }
     if (issuer === 'FHLB') fhlbCount++;
     else ffcbCount++;
 
