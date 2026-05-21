@@ -47,6 +47,17 @@ async function _throttleWrite(fn) {
 }
 
 function _loadServiceAccount() {
+  // Prefer JSON-in-env (for Render and similar hosted environments where the
+  // service-account file isn't part of the deploy artifact). Fall back to
+  // reading from disk via AGENCY_SERVICE_ACCOUNT_PATH for local dev.
+  const inline = process.env.AGENCY_SERVICE_ACCOUNT_JSON;
+  if (inline && inline.trim()) {
+    try {
+      return JSON.parse(inline);
+    } catch (e) {
+      throw new Error('AGENCY_SERVICE_ACCOUNT_JSON env var is set but not valid JSON: ' + e.message);
+    }
+  }
   const p = path.resolve(process.env.AGENCY_SERVICE_ACCOUNT_PATH || './agency-analytics/data/service-account.json');
   return require(p);
 }
