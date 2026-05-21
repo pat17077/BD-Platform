@@ -606,6 +606,7 @@ async function refreshPending() {
             </div>
             <div style="margin-top:6px; display:flex; gap:6px;">
               <button class="qr-save" data-dkey="${_esc(p.source)}|${_esc(p.structure)}|${_esc(p.trade_date)}|${_esc(p.settle_date)}" style="font-size:11px; padding:3px 10px;">Save result</button>
+              <button class="qr-dnt" data-dkey="${_esc(p.source)}|${_esc(p.structure)}|${_esc(p.trade_date)}|${_esc(p.settle_date)}" style="font-size:11px; padding:3px 10px; color:var(--warn);" title="Mark as Did Not Trade">DNT</button>
               <span class="qr-status" style="font-size:11px; align-self:center; color:var(--muted);"></span>
             </div>
           `;
@@ -701,6 +702,7 @@ async function refreshPending() {
           </div>
           <div style="margin-top:6px; display:flex; gap:6px;">
             <button class="qr-save" data-dkey="${dkey}" style="font-size:11px; padding:3px 10px;">Save result</button>
+            <button class="qr-dnt" data-dkey="${dkey}" style="font-size:11px; padding:3px 10px; color:var(--warn);" title="Mark as Did Not Trade">DNT</button>
             <span class="qr-status" style="font-size:11px; align-self:center; color:var(--muted);"></span>
           </div>
         </div>
@@ -766,34 +768,43 @@ async function refreshPending() {
         }
       };
     });
-    // One-click DNT
+    // One-click DNT — wired for the row-strip [DNT] button, the qr-dnt button
+    // inside still-pending result forms, AND the qr-dnt inside Awaiting Results.
+    async function _markDnt(dkey) {
+      const [issuer, structure, trade_date, settle_date] = dkey.split('|');
+      if (!confirm(`Mark ${issuer} ${structure} (settle ${_fmtUS(settle_date)}) as DNT?`)) return;
+      // YEL state from the row's checkbox (if present)
+      const yelCb = document.querySelector(`.pend-yel-toggle[data-dkey="${dkey}"]`);
+      const yel = yelCb && yelCb.checked ? 'Y' : '';
+      const moveEl = document.querySelector('.snapField[data-field="move"]');
+      const s5s30sEl = document.querySelector('.snapField[data-field="s5s30s"]');
+      try {
+        const r = await fetch(`${API}/desk/mark-dnt`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify({
+            issuer, structure, trade_date, settle_date, yel,
+            move:   moveEl   ? moveEl.value : '',
+            s5s30s: s5s30sEl ? s5s30sEl.value : '',
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok) { alert('DNT failed: ' + (j.error || r.status)); return; }
+        refreshPending();
+        if (typeof loadIndications === 'function') loadIndications();
+      } catch (e) { alert('error: ' + e.message); }
+    }
     list.querySelectorAll('button[data-action="mark-dnt"]').forEach((btn) => {
-      btn.onclick = async () => {
-        const [issuer, structure, trade_date, settle_date] = btn.dataset.dkey.split('|');
-        if (!confirm(`Mark ${issuer} ${structure} (settle ${_fmtUS(settle_date)}) as DNT?`)) return;
-        // Pull current YEL state from the row's checkbox and par from the visible row text
-        const yelCb = list.querySelector(`.pend-yel-toggle[data-dkey="${btn.dataset.dkey}"]`);
-        const yel = yelCb && yelCb.checked ? 'Y' : '';
-        try {
-          // Also include today's snapshot move/s5s30s if available
-          const snap = document.getElementById('snapField') ? {} : {};
-          const moveEl = document.querySelector('.snapField[data-field="move"]');
-          const s5s30sEl = document.querySelector('.snapField[data-field="s5s30s"]');
-          const r = await fetch(`${API}/desk/mark-dnt`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-            body: JSON.stringify({
-              issuer, structure, trade_date, settle_date, yel,
-              move:   moveEl   ? moveEl.value : '',
-              s5s30s: s5s30sEl ? s5s30sEl.value : '',
-            }),
-          });
-          const j = await r.json();
-          if (!r.ok) { alert('DNT failed: ' + (j.error || r.status)); return; }
-          refreshPending();
-          if (typeof loadIndications === 'function') loadIndications();
-        } catch (e) { alert('error: ' + e.message); }
-      };
+      btn.onclick = () => _markDnt(btn.dataset.dkey);
+    });
+    // Also wire qr-dnt buttons inside .pend-result inline forms (still-pending rows)
+    // and inside the Awaiting Results panel (handled below for awaitingEl too).
+    list.querySelectorAll('.qr-dnt').forEach((btn) => {
+      btn.onclick = () => _markDnt(btn.dataset.dkey);
+    });
+    const awaitEl = document.getElementById('awaitingList');
+    if (awaitEl) awaitEl.querySelectorAll('.qr-dnt').forEach((btn) => {
+      btn.onclick = () => _markDnt(btn.dataset.dkey);
     });
     // Inline edit: toggle the .pend-edit panel for this row
     list.querySelectorAll('button[data-action="edit-pending"]').forEach((btn) => {
