@@ -187,8 +187,10 @@
     </div>
   </div>
 
-  <!-- LEFT: form -->
-  <div>
+  <!-- Auction manual entry form removed — superseded by Morning Indications
+       (predictions) + Pending Auctions ("Enter result" / "+ Add result" /
+       DNT). The big multi-card form below was overkill for day-to-day work. -->
+  <div style="display:none;" id="legacyAuctionFormHidden">
     <div class="card">
       <h2>Auction</h2>
       <div class="grid">
@@ -312,8 +314,8 @@
     <div id="ok"  class="ok"></div>
   </div>
 
-  <!-- RIGHT: sidebar -->
-  <div>
+  <!-- Utility sidebar — now spans full width since the auction form is gone -->
+  <div style="grid-column: 1 / -1; display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
     <div class="card recent">
       <h2>Recent same-tenor prints <small class="help">(last 14d)</small></h2>
       <div id="recentStats">
