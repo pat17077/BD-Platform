@@ -120,6 +120,7 @@
       <div style="display:flex; gap:6px;">
         <button class="secondary" id="refreshPendingBtn" style="padding:4px 10px; font-size:12px;" title="Re-pull FHLB CBA tentatives">Refresh tentatives</button>
         <button class="secondary" id="pullResultsBtn" style="padding:4px 10px; font-size:12px;" title="Pull today's auction results from FHLB CBR + FFCB feed; auto-matches indications. Takes ~3 min.">Pull results</button>
+        <button class="secondary" id="addResultToggleBtn" style="padding:4px 10px; font-size:12px;" title="Quick-enter an auction result without a tentative — typical for FFCB prints we didn't have on the calendar">+ Add result</button>
         <button class="secondary" id="addPendingToggleBtn" style="padding:4px 10px; font-size:12px;">+ Add tentative</button>
       </div>
     </div>
@@ -129,6 +130,39 @@
     <div id="pendingList" style="font-size:13px; margin-top:6px;">
       <em style="color:var(--muted);">none yet</em>
     </div>
+    <div id="addResultForm" style="display:none; margin-top:14px; padding:10px; border:1px solid #f0d674; background:#fffbeb; border-radius:4px;">
+      <div style="font-weight:600; margin-bottom:6px;">Quick-enter auction result <small class="help">writes straight to the issues sheet — no tentative needed</small></div>
+      <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; font-size:12px;">
+        <label>Issuer
+          <select id="ar_issuer">
+            <option value="FFCB">FFCB</option>
+            <option value="FHLB">FHLB</option>
+          </select>
+        </label>
+        <label>Structure <input id="ar_structure" placeholder="7yr/1yr" /></label>
+        <label>Trade date <input id="ar_trade" type="text" placeholder="5/21" /></label>
+        <label>Settle date <input id="ar_settle" type="text" placeholder="5/28" /></label>
+        <label>Size MM <input id="ar_size" type="number" step="any" /></label>
+        <label>Coupon % *<input id="ar_coupon" type="number" step="any" placeholder="4.94" /></label>
+        <label>Fees (bp) <input id="ar_fees" type="number" step="any" placeholder="21" /></label>
+        <label>YEL
+          <select id="ar_yel"><option value="">No</option><option value="Y">Yes</option></select>
+        </label>
+        <label>Spread <input id="ar_spread" type="text" placeholder="66/7yr" /></label>
+        <label>Funding (X/Y) <input id="ar_funding" type="text" placeholder="20/15" /></label>
+        <label>OAS par <input id="ar_oas_par" type="number" step="any" /></label>
+        <label>OAS cost <input id="ar_oas_cost" type="number" step="any" /></label>
+        <label>MOVE <input id="ar_move" type="number" step="any" /></label>
+        <label>5s30s <input id="ar_s5s30s" type="number" step="any" /></label>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <button id="saveResultBtn" style="padding:6px 14px;">Save result</button>
+        <button class="secondary" id="dntResultBtn" style="padding:6px 14px; color:var(--warn);">Save as DNT</button>
+        <span class="spacer"></span>
+        <span id="arStatus" style="font-size:12px; color:var(--muted);"></span>
+      </div>
+    </div>
+
     <div id="addPendingForm" style="display:none; margin-top:14px; padding-top:10px; border-top:1px solid var(--border);">
       <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; font-size:12px;">
         <label>Issuer
@@ -472,6 +506,68 @@ function initForm() {
     }
   };
   document.getElementById('savePendingBtn').onclick = doSavePending;
+  // Quick-add auction result (FFCB walk-ins or anything not preloaded)
+  const arToggle = document.getElementById('addResultToggleBtn');
+  if (arToggle) arToggle.onclick = () => {
+    const el = document.getElementById('addResultForm');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    if (el.style.display === 'block') {
+      document.getElementById('ar_trade').value = _todayIso();
+      ['ar_size','ar_coupon','ar_fees','ar_oas_par','ar_oas_cost','ar_move','ar_s5s30s'].forEach((id) => {
+        const e = document.getElementById(id); if (e) _forceDecimalPeriod(e);
+      });
+    }
+  };
+  async function _submitAddResult(asDnt) {
+    const status = document.getElementById('arStatus');
+    const issuer = document.getElementById('ar_issuer').value;
+    const structure = document.getElementById('ar_structure').value.trim();
+    const tradeIso  = _parseFlexDate(document.getElementById('ar_trade').value);
+    const settleIso = _parseFlexDate(document.getElementById('ar_settle').value);
+    const yel = document.getElementById('ar_yel').value;
+    const size_mm = document.getElementById('ar_size').value;
+    if (!structure || !tradeIso || !settleIso) {
+      status.style.color = 'var(--bad)'; status.textContent = 'structure + trade + settle required'; return;
+    }
+    const body = {
+      issuer, structure, trade_date: tradeIso, settle_date: settleIso, yel, size_mm,
+      move:   document.getElementById('ar_move').value,
+      s5s30s: document.getElementById('ar_s5s30s').value,
+    };
+    let endpoint, label;
+    if (asDnt) {
+      endpoint = `${API}/desk/mark-dnt`; label = 'DNT';
+    } else {
+      const coupon = document.getElementById('ar_coupon').value;
+      if (!coupon) { status.style.color = 'var(--bad)'; status.textContent = 'coupon required'; return; }
+      Object.assign(body, {
+        coupon, fees: document.getElementById('ar_fees').value,
+        spread:  document.getElementById('ar_spread').value,
+        funding: document.getElementById('ar_funding').value,
+        oas_par:  document.getElementById('ar_oas_par').value,
+        oas_cost: document.getElementById('ar_oas_cost').value,
+      });
+      endpoint = `${API}/desk/quick-result`; label = 'result';
+    }
+    status.style.color = 'var(--muted)'; status.textContent = 'saving…';
+    try {
+      const r = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify(body),
+      });
+      const j = await r.json();
+      if (!r.ok) { status.style.color = 'var(--bad)'; status.textContent = 'err: ' + (j.error || r.status); return; }
+      status.style.color = 'var(--good)'; status.textContent = `✓ ${label} saved · matched ${j.indications_matched||0} ind.`;
+      // Clear form (keep issuer + trade_date for the next entry)
+      ['ar_structure','ar_settle','ar_size','ar_coupon','ar_fees','ar_spread','ar_funding','ar_oas_par','ar_oas_cost'].forEach((id) => { document.getElementById(id).value = ''; });
+      document.getElementById('ar_yel').value = '';
+      refreshPending();
+      if (typeof loadIndications === 'function') loadIndications();
+    } catch (e) { status.style.color = 'var(--bad)'; status.textContent = 'err: ' + e.message; }
+  }
+  document.getElementById('saveResultBtn').onclick = () => _submitAddResult(false);
+  document.getElementById('dntResultBtn').onclick = () => _submitAddResult(true);
   // Date label on the Pending Auctions panel header
   const pdl = document.getElementById('pendingDateLabel');
   if (pdl) pdl.textContent = '— ' + _fmtUS(_todayIso());
