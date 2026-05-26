@@ -2330,9 +2330,15 @@ app.use('/api/internal/agency', require('./agency-analytics/server/routes'));
 app.use('/api/internal/agency', require('./agency-analytics/server/desk-routes'));
 app.get('/agency', (_req, res) => res.sendFile(path.join(__dirname, 'agency-analytics', 'public', 'desk.html')));
 
-// ─── Tidal Finance — public tokenized-bond landing page ───────────────────────
-// Public (no desk/agency auth). Eventually becomes its own product surface.
-app.get('/tidal', (_req, res) => res.sendFile(path.join(__dirname, 'tidal.html')));
+// ─── Tidal Finance — tokenized-bond landing page ──────────────────────────────
+// Feature-gated: only served when TIDAL_PUBLIC=1. Keep it set locally to build,
+// and leave it UNSET on Render so the page stays hidden in production until you
+// decide to launch (then just add TIDAL_PUBLIC=1 to Render — no redeploy needed).
+const TIDAL_PUBLIC = process.env.TIDAL_PUBLIC === '1' || process.env.TIDAL_PUBLIC === 'true';
+app.get('/tidal', (_req, res) => {
+  if (!TIDAL_PUBLIC) return res.status(404).send('Not found');
+  res.sendFile(path.join(__dirname, 'tidal.html'));
+});
 
 // Email capture from the landing page
 app.post('/api/tidal/subscribe', async (req, res) => {
