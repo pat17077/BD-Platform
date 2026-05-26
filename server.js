@@ -2330,6 +2330,71 @@ app.use('/api/internal/agency', require('./agency-analytics/server/routes'));
 app.use('/api/internal/agency', require('./agency-analytics/server/desk-routes'));
 app.get('/agency', (_req, res) => res.sendFile(path.join(__dirname, 'agency-analytics', 'public', 'desk.html')));
 
+// ─── Tidal Finance — public tokenized-bond landing page ───────────────────────
+// Public (no desk/agency auth). Eventually becomes its own product surface.
+app.get('/tidal', (_req, res) => res.sendFile(path.join(__dirname, 'tidal.html')));
+
+// Email capture from the landing page
+app.post('/api/tidal/subscribe', async (req, res) => {
+  try {
+    const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return res.status(400).json({ error: 'valid email required' });
+    }
+    const audience = ['retail', 'institutional'].includes(req.body.audience) ? req.body.audience : 'unspecified';
+    await agencyDb.upsertRow('subscribers', {
+      email,
+      audience,
+      created_at: new Date().toISOString(),
+      source: 'tidal-landing',
+      note: String((req.body && req.body.note) || '').slice(0, 200),
+    });
+    const total = agencyDb.getRows('subscribers').length;
+    res.json({ ok: true, total });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// A single live agency CUSIP so the landing page shows a concrete example
+app.get('/api/tidal/sample-bond', (_req, res) => {
+  try {
+    const rows = (agencyDb.getRows('issues') || []).filter((r) =>
+      r.cusip && !String(r.cusip).startsWith('PENDING-') &&
+      r.coupon && r.coupon !== '' && r.fees !== 'DNT' &&
+      (r.issuer === 'FHLB' || r.issuer === 'FFCB')
+    );
+    if (!rows.length) return res.json({ bond: null });
+    // Most recent priced
+    rows.sort((a, b) => (b.pricing_date || '').localeCompare(a.pricing_date || ''));
+    const r = rows[0];
+    res.json({
+      bond: {
+        cusip: r.cusip,
+        issuer: r.issuer,
+        structure: r.structure,
+        coupon: r.coupon,
+        spread: r.spread,
+        settle_date: r.settle_date,
+        maturity_date: r.maturity_date,
+        first_call_date: r.first_call_date,
+        min_par: r.issuer === 'FHLB' ? 10000 : 1000,
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Subscriber count (for the "join N others" social proof)
+app.get('/api/tidal/stats', (_req, res) => {
+  try {
+    res.json({ subscribers: (agencyDb.getRows('subscribers') || []).length });
+  } catch (e) {
+    res.json({ subscribers: 0 });
+  }
+});
+
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
 

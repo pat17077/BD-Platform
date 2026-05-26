@@ -81,6 +81,11 @@ const SCHEMA = {
     'sofr_overnight', 's5s30s', 'move',
     'notes', 'updated_at', 'updated_by',
   ],
+
+  // Tidal Finance landing-page email capture
+  subscribers: [
+    'email', 'audience', 'created_at', 'source', 'note',
+  ],
 };
 
 const PRIMARY_KEYS = {
@@ -97,6 +102,7 @@ const PRIMARY_KEYS = {
   pending_auctions: ['trade_date', 'structure', 'settle_date'],
   indications: ['indication_id'],
   market_snapshots: ['snapshot_date'],
+  subscribers: ['email'],
 };
 
 module.exports = { SCHEMA, PRIMARY_KEYS };

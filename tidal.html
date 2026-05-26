@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tidal Finance — US agency bonds, on-chain, around the clock</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --ink:#0b1f33; --ink2:#3a5169; --muted:#7388a0; --line:#e4ebf2;
+    --bg:#ffffff; --bg2:#f5f9fc; --tide:#0a84ff; --tide-deep:#0860c4;
+    --sea:#0b3d5c; --foam:#e8f3ff; --good:#0f9d6b; --warn:#c77700;
+    --r:14px; --shadow:0 1px 2px rgba(11,31,51,.04), 0 8px 30px rgba(11,31,51,.06);
+  }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body {
+    margin:0; color:var(--ink); background:var(--bg);
+    font:16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a { color:var(--tide-deep); text-decoration:none; }
+  .wrap { max-width:1080px; margin:0 auto; padding:0 24px; }
+  h1,h2,h3 { line-height:1.15; letter-spacing:-0.02em; margin:0; }
+  h1 { font-size:clamp(36px,6vw,64px); font-weight:700; }
+  h2 { font-size:clamp(26px,4vw,38px); font-weight:700; }
+  h3 { font-size:20px; font-weight:650; }
+  p { margin:0 0 16px; color:var(--ink2); }
+  .sub { color:var(--muted); }
+
+  /* ── Nav ── */
+  nav { position:sticky; top:0; z-index:30; background:rgba(255,255,255,.82); backdrop-filter:saturate(180%) blur(14px); border-bottom:1px solid var(--line); }
+  .nav-inner { display:flex; align-items:center; justify-content:space-between; height:64px; }
+  .brand { display:flex; align-items:center; gap:10px; font-weight:700; font-size:19px; letter-spacing:-0.02em; color:var(--ink); }
+  .brand .mark { width:26px; height:26px; }
+  .nav-cta { background:var(--ink); color:#fff; padding:9px 18px; border-radius:999px; font-size:14px; font-weight:600; }
+  .nav-cta:hover { background:var(--sea); }
+
+  /* ── Hero ── */
+  .hero { position:relative; overflow:hidden; background:linear-gradient(180deg, #f7fbff 0%, #ffffff 100%); border-bottom:1px solid var(--line); }
+  .hero-inner { padding:84px 0 72px; text-align:center; }
+  .eyebrow { display:inline-block; font-size:13px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:var(--tide-deep); background:var(--foam); padding:6px 14px; border-radius:999px; margin-bottom:24px; }
+  .hero h1 span { color:var(--tide-deep); }
+  .hero p.lead { font-size:clamp(17px,2.2vw,21px); max-width:620px; margin:22px auto 0; color:var(--ink2); }
+  .hero-actions { margin-top:34px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+  .btn { display:inline-flex; align-items:center; gap:8px; font-weight:600; font-size:15px; padding:13px 26px; border-radius:999px; cursor:pointer; border:none; }
+  .btn-primary { background:var(--tide-deep); color:#fff; }
+  .btn-primary:hover { background:var(--sea); }
+  .btn-ghost { background:#fff; color:var(--ink); border:1px solid var(--line); }
+  .btn-ghost:hover { border-color:var(--ink2); }
+  .tideline { margin-top:8px; font-size:13px; color:var(--muted); }
+
+  /* wave divider */
+  .waves { display:block; width:100%; height:60px; }
+
+  /* ── Audience toggle ── */
+  .toggle-wrap { display:flex; justify-content:center; margin:-26px 0 0; position:relative; z-index:5; }
+  .toggle { display:inline-flex; background:#fff; border:1px solid var(--line); border-radius:999px; padding:5px; box-shadow:var(--shadow); }
+  .toggle button { border:none; background:transparent; font:inherit; font-weight:600; font-size:14px; color:var(--muted); padding:9px 22px; border-radius:999px; cursor:pointer; }
+  .toggle button.active { background:var(--ink); color:#fff; }
+
+  section { padding:64px 0; }
+  .section-head { text-align:center; max-width:640px; margin:0 auto 44px; }
+  .section-head p { font-size:17px; }
+
+  /* cards */
+  .cards { display:grid; gap:18px; grid-template-columns:repeat(auto-fit, minmax(260px,1fr)); }
+  .card { background:#fff; border:1px solid var(--line); border-radius:var(--r); padding:26px; box-shadow:var(--shadow); }
+  .card .ic { width:42px; height:42px; border-radius:11px; background:var(--foam); display:flex; align-items:center; justify-content:center; margin-bottom:16px; font-size:20px; }
+  .card h3 { margin-bottom:8px; }
+  .card p { font-size:15px; margin:0; }
+
+  /* steps */
+  .steps { display:grid; gap:0; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); }
+  .step { padding:24px; border-left:2px solid var(--line); position:relative; }
+  .step:first-child { border-left:none; }
+  .step .n { font-size:13px; font-weight:700; color:var(--tide-deep); margin-bottom:8px; }
+  .step h3 { font-size:17px; margin-bottom:6px; }
+  .step p { font-size:14px; margin:0; }
+
+  /* liquidity split */
+  .liq { display:grid; gap:18px; grid-template-columns:1fr 1fr; }
+  @media(max-width:720px){ .liq{ grid-template-columns:1fr; } }
+  .liq-card { border-radius:var(--r); padding:30px; border:1px solid var(--line); }
+  .liq-open { background:linear-gradient(160deg,#f0f8ff,#ffffff); }
+  .liq-closed { background:linear-gradient(160deg,#0b3d5c,#0b1f33); color:#cfe2f2; border-color:transparent; }
+  .liq-closed h3, .liq-closed .tag { color:#fff; }
+  .liq-closed p { color:#aecadf; }
+  .tag { display:inline-block; font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:5px 11px; border-radius:999px; margin-bottom:14px; }
+  .tag.open { background:#dff3e8; color:var(--good); }
+  .tag.closed { background:rgba(255,255,255,.12); color:#fff; }
+
+  /* sample bond */
+  .bond { background:var(--bg2); border:1px solid var(--line); border-radius:var(--r); padding:24px 28px; display:flex; flex-wrap:wrap; gap:26px 44px; align-items:center; justify-content:space-between; }
+  .bond .field .k { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .bond .field .v { font-size:20px; font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums; }
+  .bond .tokenize { background:var(--tide-deep); color:#fff; padding:11px 20px; border-radius:999px; font-weight:600; font-size:14px; }
+
+  /* callable explainer */
+  .explain { background:var(--bg2); border-radius:var(--r); padding:34px; border:1px solid var(--line); }
+  .explain .row { display:flex; gap:16px; align-items:flex-start; margin-bottom:16px; }
+  .explain .row:last-child { margin-bottom:0; }
+  .explain .dot { flex:none; width:28px; height:28px; border-radius:50%; background:var(--foam); color:var(--tide-deep); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; }
+
+  /* subscribe */
+  .subscribe { background:linear-gradient(160deg,#0b3d5c,#0b1f33); color:#fff; border-radius:22px; padding:54px 40px; text-align:center; }
+  .subscribe h2 { color:#fff; }
+  .subscribe p { color:#aecadf; max-width:520px; margin:14px auto 28px; }
+  .sub-form { display:flex; gap:10px; max-width:460px; margin:0 auto; flex-wrap:wrap; justify-content:center; }
+  .sub-form input { flex:1; min-width:220px; border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.08); color:#fff; border-radius:999px; padding:13px 20px; font:inherit; font-size:15px; }
+  .sub-form input::placeholder { color:#8fb0c8; }
+  .sub-form button { background:var(--tide); color:#fff; border:none; border-radius:999px; padding:13px 28px; font-weight:600; font-size:15px; cursor:pointer; }
+  .sub-form button:hover { background:#3a9dff; }
+  .sub-note { margin-top:16px; font-size:13px; color:#8fb0c8; }
+  .sub-ok { margin-top:16px; font-size:15px; color:#7fe6b5; font-weight:600; display:none; }
+
+  footer { padding:40px 0; border-top:1px solid var(--line); color:var(--muted); font-size:13px; text-align:center; }
+  .disclaim { max-width:780px; margin:14px auto 0; font-size:12px; color:#9aabbd; line-height:1.5; }
+
+  .track { display:none; }
+  .track.active { display:block; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap nav-inner">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 32 32" fill="none"><path d="M2 20c4 0 4-5 8-5s4 5 8 5 4-5 8-5" stroke="#0860c4" stroke-width="2.4" stroke-linecap="round"/><path d="M2 26c4 0 4-5 8-5s4 5 8 5 4-5 8-5" stroke="#0a84ff" stroke-width="2.4" stroke-linecap="round" opacity=".5"/><circle cx="16" cy="9" r="3.4" fill="#0860c4"/></svg>
+      Tidal Finance
+    </div>
+    <a href="#subscribe" class="nav-cta">Get early access</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-inner">
+    <span class="eyebrow">Tokenized US Agency Bonds</span>
+    <h1>The market has hours.<br><span>The tide doesn't.</span></h1>
+    <p class="lead">Own whole US agency bonds on-chain — bought with stablecoins, tradeable around the clock. Institutional-grade fixed income, finally borderless.</p>
+    <div class="hero-actions">
+      <a href="#subscribe" class="btn btn-primary">Join the first drop →</a>
+      <a href="#how" class="btn btn-ghost">How it works</a>
+    </div>
+    <div class="tideline">First drop: FHLB &amp; FFCB callables · Navy-chip institutional credit · settle in stablecoin</div>
+  </div>
+  <svg class="waves" viewBox="0 0 1440 60" preserveAspectRatio="none"><path d="M0 30 C 240 60, 480 0, 720 30 S 1200 60, 1440 30 L1440 60 L0 60 Z" fill="#f5f9fc"/></svg>
+</header>
+
+<div class="toggle-wrap">
+  <div class="toggle">
+    <button id="tgl-retail" class="active" onclick="setTrack('retail')">For Investors</button>
+    <button id="tgl-inst" onclick="setTrack('institutional')">For Institutions</button>
+  </div>
+</div>
+
+<!-- ─────────── RETAIL TRACK ─────────── -->
+<div class="track active" id="track-retail">
+
+  <section>
+    <div class="wrap section-head">
+      <h2>What you're actually buying</h2>
+      <p>A token that represents one real US agency bond held in custody. Not a fund, not a fraction — the whole bond, in your wallet.</p>
+    </div>
+    <div class="wrap cards">
+      <div class="card">
+        <div class="ic">🏛️</div>
+        <h3>Government-tier credit</h3>
+        <p>Federal agencies (FHLB, Freddie, Farm Credit). The kind of paper money funds and banks hold — now open to you.</p>
+      </div>
+      <div class="card">
+        <div class="ic">💵</div>
+        <h3>Buy with stablecoins</h3>
+        <p>No US brokerage, no wires, no borders. Fund with stablecoin and the token lands in your wallet.</p>
+      </div>
+      <div class="card">
+        <div class="ic">🌊</div>
+        <h3>Liquidity that never sleeps</h3>
+        <p>Trade peer-to-peer any hour. During US hours we source dealer bids; after hours we'll quote you a price up to size.</p>
+      </div>
+    </div>
+  </section>
+
+  <section style="background:var(--bg2); border-top:1px solid var(--line); border-bottom:1px solid var(--line);">
+    <div class="wrap section-head">
+      <h2>The "call," in plain English</h2>
+      <p>These are <em>callable</em> bonds. One feature, one trade-off — here's the whole story.</p>
+    </div>
+    <div class="wrap explain">
+      <div class="row"><div class="dot">1</div><div><strong>You earn a higher coupon.</strong> Because you're giving the issuer a choice (below), they pay you more than a plain bond of the same maturity.</div></div>
+      <div class="row"><div class="dot">2</div><div><strong>The issuer can buy it back early.</strong> If interest rates fall, they may "call" the bond — return your principal and stop the coupon. That's the only catch.</div></div>
+      <div class="row"><div class="dot">3</div><div><strong>Either outcome is fine for you.</strong> Not called → you keep collecting an above-market coupon. Called → you get 100¢ back and redeploy. You were paid extra the whole time for the possibility.</div></div>
+      <div class="row"><div class="dot">✓</div><div><strong>Bottom line:</strong> you're paid a premium yield to let the issuer refinance if rates drop. For a buy-and-earn investor, that premium is the point.</div></div>
+    </div>
+  </section>
+
+  <section id="sample">
+    <div class="wrap section-head">
+      <h2>A live example</h2>
+      <p>One of the agency bonds from a recent auction — the kind that will tokenize in the first drop.</p>
+    </div>
+    <div class="wrap">
+      <div class="bond" id="bondCard">
+        <div class="field"><div class="k">Issuer</div><div class="v" id="b-issuer">—</div></div>
+        <div class="field"><div class="k">Structure</div><div class="v" id="b-struct">—</div></div>
+        <div class="field"><div class="k">Coupon</div><div class="v" id="b-coupon">—</div></div>
+        <div class="field"><div class="k">First call</div><div class="v" id="b-call">—</div></div>
+        <div class="field"><div class="k">Maturity</div><div class="v" id="b-mat">—</div></div>
+        <div class="field"><div class="k">Min size</div><div class="v" id="b-min">—</div></div>
+        <a href="#subscribe" class="tokenize">Notify me when it drops</a>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ─────────── INSTITUTIONAL TRACK ─────────── -->
+<div class="track" id="track-institutional">
+
+  <section>
+    <div class="wrap section-head">
+      <h2>Why agencies, why on-chain</h2>
+      <p>High-grade US government-sponsored credit, distributed to a global base that historically couldn't touch it — with a liquidity model built for 24/7 settlement.</p>
+    </div>
+    <div class="wrap cards">
+      <div class="card">
+        <div class="ic">📈</div>
+        <h3>Spread over Treasuries</h3>
+        <p>Agency callables price at a pickup to UST for the embedded call — incremental yield on AA+/Aaa-tier credit versus bills and money funds.</p>
+      </div>
+      <div class="card">
+        <div class="ic">🌐</div>
+        <h3>A new distribution rail</h3>
+        <p>Stablecoin settlement opens US agency paper to foreign capital that can't easily hold a US brokerage account — demand that didn't exist for this asset before.</p>
+      </div>
+      <div class="card">
+        <div class="ic">🔁</div>
+        <h3>Hybrid liquidity</h3>
+        <p>On-network peer-to-peer 24/7, with dealer-sourced bids during US hours and a risk-priced firm quote up to size after hours.</p>
+      </div>
+      <div class="card">
+        <div class="ic">🔒</div>
+        <h3>Whole-bond custody</h3>
+        <p>1 token = 1 CUSIP held in custody. No fractional reconciliation, no synthetic exposure — clean, auditable, on-chain ownership.</p>
+      </div>
+      <div class="card">
+        <div class="ic">⏱️</div>
+        <h3>Faster settlement</h3>
+        <p>On-chain transfer replaces multi-day clearing for secondary trades between holders — near-instant, atomic versus stablecoin.</p>
+      </div>
+      <div class="card">
+        <div class="ic">🧱</div>
+        <h3>Built to broaden</h3>
+        <p>Starting with agency CUSIPs we know cold, then extending the same tokenization rail across asset classes.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ─────────── SHARED: HOW LIQUIDITY WORKS ─────────── -->
+<section id="how" style="background:var(--bg2); border-top:1px solid var(--line); border-bottom:1px solid var(--line);">
+  <div class="wrap section-head">
+    <h2>Liquidity follows the tide</h2>
+    <p>Most fixed income goes dark when the US closes. Tidal keeps a market for your tokens whether Wall Street is open or not.</p>
+  </div>
+  <div class="wrap liq">
+    <div class="liq-card liq-open">
+      <span class="tag open">● US market hours</span>
+      <h3>Put up a size, get dealer bids</h3>
+      <p style="font-size:15px;">List the tokens you want to sell. Tidal shops the size into the dealer market and brings back live bids — the same wholesale pricing the desk sees, passed through to you.</p>
+    </div>
+    <div class="liq-card liq-closed">
+      <span class="tag closed">◐ After hours &amp; weekends</span>
+      <h3>Trade peer-to-peer, or take our price</h3>
+      <p style="font-size:15px;">Match directly with another holder on-network anytime. No counterparty waiting? Tidal will quote a firm price up to a set size, marked off the last market and a transparent risk buffer.</p>
+    </div>
+  </div>
+  <div class="wrap steps" style="margin-top:34px;">
+    <div class="step"><div class="n">STEP 1</div><h3>Fund</h3><p>Deposit stablecoin. No US account required.</p></div>
+    <div class="step"><div class="n">STEP 2</div><h3>Own</h3><p>Get a token = one real agency bond in custody, collecting its coupon.</p></div>
+    <div class="step"><div class="n">STEP 3</div><h3>Trade</h3><p>Sell P2P, into dealer bids, or to Tidal — on your schedule, not the market's.</p></div>
+  </div>
+</section>
+
+<!-- ─────────── SUBSCRIBE ─────────── -->
+<section id="subscribe">
+  <div class="wrap">
+    <div class="subscribe">
+      <h2>Be first when the tide comes in</h2>
+      <p>The first drop is FHLB &amp; FFCB callables, settling in stablecoin. Leave your email and tell us which side you're on — we'll notify you before it goes live.</p>
+      <div class="sub-form">
+        <input id="subEmail" type="email" placeholder="you@email.com" autocomplete="email" />
+        <select id="subAudience" style="border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.08); color:#fff; border-radius:999px; padding:13px 18px; font:inherit; font-size:15px;">
+          <option value="retail">I'm an investor</option>
+          <option value="institutional">I'm an institution</option>
+        </select>
+        <button onclick="doSubscribe()">Notify me</button>
+      </div>
+      <div class="sub-ok" id="subOk">✓ You're on the list. We'll be in touch before the drop.</div>
+      <div class="sub-note" id="subNote">No spam. Just one note when the first bonds go on-chain.</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="brand" style="justify-content:center; margin-bottom:8px;">
+      <svg class="mark" viewBox="0 0 32 32" fill="none"><path d="M2 20c4 0 4-5 8-5s4 5 8 5 4-5 8-5" stroke="#0860c4" stroke-width="2.4" stroke-linecap="round"/><circle cx="16" cy="9" r="3.4" fill="#0860c4"/></svg>
+      Tidal Finance
+    </div>
+    © 2026 Tidal Finance · Tokenized fixed income
+    <div class="disclaim">
+      For informational purposes only and not an offer to sell or a solicitation to buy any security. Tokenized bonds carry risk including issuer call, interest-rate, and liquidity risk. Availability subject to jurisdiction and eligibility. Nothing here is investment advice.
+    </div>
+  </div>
+</footer>
+
+<script>
+  function setTrack(which) {
+    document.getElementById('track-retail').classList.toggle('active', which === 'retail');
+    document.getElementById('track-institutional').classList.toggle('active', which === 'institutional');
+    document.getElementById('tgl-retail').classList.toggle('active', which === 'retail');
+    document.getElementById('tgl-inst').classList.toggle('active', which === 'institutional');
+    document.getElementById('subAudience').value = which;
+  }
+
+  async function loadSample() {
+    try {
+      const r = await fetch('/api/tidal/sample-bond');
+      const j = await r.json();
+      if (!j.bond) return;
+      const b = j.bond;
+      const fmtD = (iso) => { if (!iso) return '—'; const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[2]}/${m[3]}/${m[1].slice(2)}` : iso; };
+      document.getElementById('b-issuer').textContent = b.issuer || '—';
+      document.getElementById('b-struct').textContent = b.structure || '—';
+      document.getElementById('b-coupon').textContent = b.coupon ? b.coupon + '%' : '—';
+      document.getElementById('b-call').textContent = fmtD(b.first_call_date);
+      document.getElementById('b-mat').textContent = fmtD(b.maturity_date);
+      document.getElementById('b-min').textContent = b.min_par ? '$' + b.min_par.toLocaleString() : '—';
+    } catch (e) {}
+  }
+
+  async function loadStats() {
+    try {
+      const r = await fetch('/api/tidal/stats');
+      const j = await r.json();
+      if (j.subscribers > 0) {
+        document.getElementById('subNote').textContent = `Join ${j.subscribers} others waiting on the first drop.`;
+      }
+    } catch (e) {}
+  }
+
+  async function doSubscribe() {
+    const email = document.getElementById('subEmail').value.trim();
+    const audience = document.getElementById('subAudience').value;
+    const note = document.getElementById('subNote');
+    const ok = document.getElementById('subOk');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      note.textContent = 'Please enter a valid email.'; note.style.color = '#ffb3b3'; return;
+    }
+    try {
+      const r = await fetch('/api/tidal/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, audience }),
+      });
+      const j = await r.json();
+      if (!r.ok) { note.textContent = j.error || 'Something went wrong.'; note.style.color = '#ffb3b3'; return; }
+      document.getElementById('subEmail').value = '';
+      ok.style.display = 'block';
+      note.style.display = 'none';
+    } catch (e) {
+      note.textContent = 'Network error — try again.'; note.style.color = '#ffb3b3';
+    }
+  }
+
+  loadSample();
+  loadStats();
+</script>
+</body>
+</html>
