@@ -319,15 +319,37 @@
   <div class="wrap">
     <div class="subscribe">
       <h2>Be first when the tide comes in</h2>
-      <p>The first drop is FHLB &amp; FFCB callables, settling in stablecoin. Leave your email and tell us which side you're on — we'll notify you before it goes live.</p>
+      <p>The first drop is FHLB &amp; FFCB callables, settling in stablecoin. Available to <strong>non-US persons only</strong>. Leave your details and we'll notify you before it goes live.</p>
       <div class="sub-form">
         <input id="subEmail" type="email" placeholder="you@email.com" autocomplete="email" />
+        <select id="subCountry" style="border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.08); color:#fff; border-radius:999px; padding:13px 18px; font:inherit; font-size:15px;">
+          <option value="">Country / jurisdiction…</option>
+          <option value="US">United States</option>
+          <option value="GB">United Kingdom</option>
+          <option value="CH">Switzerland</option>
+          <option value="SG">Singapore</option>
+          <option value="HK">Hong Kong</option>
+          <option value="AE">United Arab Emirates</option>
+          <option value="JP">Japan</option>
+          <option value="DE">Germany</option>
+          <option value="FR">France</option>
+          <option value="CA">Canada</option>
+          <option value="AU">Australia</option>
+          <option value="BR">Brazil</option>
+          <option value="MX">Mexico</option>
+          <option value="KR">South Korea</option>
+          <option value="OTHER">Other</option>
+        </select>
         <select id="subAudience" style="border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.08); color:#fff; border-radius:999px; padding:13px 18px; font:inherit; font-size:15px;">
           <option value="retail">I'm an investor</option>
           <option value="institutional">I'm an institution</option>
         </select>
         <button onclick="doSubscribe()">Notify me</button>
       </div>
+      <label style="display:flex; align-items:flex-start; gap:8px; max-width:460px; margin:16px auto 0; font-size:13px; color:#aecadf; text-align:left; cursor:pointer;">
+        <input type="checkbox" id="subNotUs" style="margin-top:3px; flex:none;" />
+        <span>I confirm I am not a US person and am accessing this from outside the United States.</span>
+      </label>
       <div class="sub-ok" id="subOk">✓ You're on the list. We'll be in touch before the drop.</div>
       <div class="sub-note" id="subNote">No spam. Just one note when the first bonds go on-chain.</div>
     </div>
@@ -342,7 +364,7 @@
     </div>
     © 2026 Tidal Finance · Tokenized fixed income
     <div class="disclaim">
-      For informational purposes only and not an offer to sell or a solicitation to buy any security. Tokenized bonds carry risk including issuer call, interest-rate, and liquidity risk. Availability subject to jurisdiction and eligibility. Nothing here is investment advice.
+      For informational purposes only and not an offer to sell or a solicitation to buy any security in any jurisdiction. <strong>Not directed at or available to US persons.</strong> Any future offering is intended for non-US persons in offshore transactions and is subject to jurisdiction, eligibility, and verification. Tokenized bonds carry risk including issuer call, interest-rate, and liquidity risk. Nothing here is investment advice.
     </div>
   </div>
 </footer>
@@ -385,19 +407,31 @@
   async function doSubscribe() {
     const email = document.getElementById('subEmail').value.trim();
     const audience = document.getElementById('subAudience').value;
+    const country = document.getElementById('subCountry').value;
+    const notUs = document.getElementById('subNotUs').checked;
     const note = document.getElementById('subNote');
     const ok = document.getElementById('subOk');
+    note.style.color = '#8fb0c8';
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       note.textContent = 'Please enter a valid email.'; note.style.color = '#ffb3b3'; return;
     }
+    if (!country) { note.textContent = 'Please select your country.'; note.style.color = '#ffb3b3'; return; }
+    if (country === 'US') {
+      note.textContent = 'Not currently available to US persons. We hope to open access later.'; note.style.color = '#ffb3b3'; return;
+    }
+    if (!notUs) { note.textContent = 'Please confirm you are not a US person.'; note.style.color = '#ffb3b3'; return; }
     try {
       const r = await fetch('/api/tidal/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, audience }),
+        body: JSON.stringify({ email, audience, country, not_us: notUs }),
       });
       const j = await r.json();
-      if (!r.ok) { note.textContent = j.error || 'Something went wrong.'; note.style.color = '#ffb3b3'; return; }
+      if (!r.ok) {
+        if (j.error === 'us_blocked') { note.textContent = 'Not currently available to US persons.'; }
+        else { note.textContent = j.error || 'Something went wrong.'; }
+        note.style.color = '#ffb3b3'; return;
+      }
       document.getElementById('subEmail').value = '';
       ok.style.display = 'block';
       note.style.display = 'none';

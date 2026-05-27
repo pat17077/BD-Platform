@@ -84,7 +84,7 @@ const SCHEMA = {
 
   // Tidal Finance landing-page email capture
   subscribers: [
-    'email', 'audience', 'created_at', 'source', 'note',
+    'email', 'audience', 'country', 'created_at', 'source', 'note',
   ],
 };
 

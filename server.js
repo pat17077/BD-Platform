@@ -2340,20 +2340,30 @@ app.get('/tidal', (_req, res) => {
   res.sendFile(path.join(__dirname, 'tidal.html'));
 });
 
-// Email capture from the landing page
+// Email capture from the landing page. NON-US PERSONS ONLY — we reject any
+// US country selection or a failed non-US attestation, and never store the
+// interest, so the waitlist stays clean while securities counsel is engaged.
 app.post('/api/tidal/subscribe', async (req, res) => {
   try {
-    const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+    const b = req.body || {};
+    const email = String(b.email || '').trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       return res.status(400).json({ error: 'valid email required' });
     }
-    const audience = ['retail', 'institutional'].includes(req.body.audience) ? req.body.audience : 'unspecified';
+    const country = String(b.country || '').trim().toUpperCase();
+    if (!country) return res.status(400).json({ error: 'country required' });
+    // Hard block US persons (Regulation S — offshore, non-US persons only).
+    if (country === 'US' || country === 'USA' || country === 'UNITED STATES' || b.not_us === false) {
+      return res.status(403).json({ error: 'us_blocked' });
+    }
+    const audience = ['retail', 'institutional'].includes(b.audience) ? b.audience : 'unspecified';
     await agencyDb.upsertRow('subscribers', {
       email,
       audience,
+      country,
       created_at: new Date().toISOString(),
       source: 'tidal-landing',
-      note: String((req.body && req.body.note) || '').slice(0, 200),
+      note: String(b.note || '').slice(0, 200),
     });
     const total = agencyDb.getRows('subscribers').length;
     res.json({ ok: true, total });
