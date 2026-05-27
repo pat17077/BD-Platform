@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Understand this bond — Tidal Finance</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --ink:#0b1f33; --ink2:#3a5169; --muted:#7388a0; --line:#e4ebf2;
+    --bg:#ffffff; --bg2:#f5f9fc; --tide:#0a84ff; --tide-deep:#0860c4;
+    --sea:#0b3d5c; --foam:#e8f3ff; --good:#0f9d6b; --warn:#c77700; --bad:#c4452f;
+    --r:14px; --shadow:0 1px 2px rgba(11,31,51,.04), 0 8px 30px rgba(11,31,51,.06);
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; color:var(--ink); background:var(--bg2); font:16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--tide-deep); text-decoration:none; }
+  .wrap { max-width:880px; margin:0 auto; padding:0 20px; }
+  h1,h2,h3 { line-height:1.15; letter-spacing:-0.02em; margin:0; }
+  h1 { font-size:clamp(26px,4vw,38px); font-weight:700; }
+  h2 { font-size:22px; font-weight:700; }
+  p { margin:0 0 14px; color:var(--ink2); }
+  .muted { color:var(--muted); }
+
+  nav { background:rgba(255,255,255,.9); backdrop-filter:blur(12px); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:20; }
+  .nav-inner { display:flex; align-items:center; justify-content:space-between; height:60px; max-width:880px; margin:0 auto; padding:0 20px; }
+  .brand { display:flex; align-items:center; gap:9px; font-weight:700; font-size:17px; color:var(--ink); }
+  .brand .mark { width:24px; height:24px; }
+
+  .card { background:#fff; border:1px solid var(--line); border-radius:var(--r); padding:26px; box-shadow:var(--shadow); margin-bottom:18px; }
+  .pill { display:inline-block; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:5px 11px; border-radius:999px; background:var(--foam); color:var(--tide-deep); }
+
+  /* bond header */
+  .bh { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; margin:14px 0 4px; }
+  .bh .name { font-size:clamp(24px,4vw,34px); font-weight:700; }
+  .specs { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:14px 20px; margin-top:18px; }
+  .spec .k { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .spec .v { font-size:21px; font-weight:700; font-variant-numeric:tabular-nums; }
+
+  /* income calc */
+  .calc { display:flex; flex-wrap:wrap; align-items:center; gap:14px; }
+  .calc label { font-size:14px; color:var(--ink2); }
+  .calc input[type=number] { width:90px; font:inherit; font-size:18px; font-weight:600; padding:9px 12px; border:1px solid var(--line); border-radius:10px; text-align:center; }
+  .calc .arrow { color:var(--muted); font-size:22px; }
+  .income { background:var(--foam); border-radius:12px; padding:16px 22px; }
+  .income .big { font-size:30px; font-weight:800; color:var(--tide-deep); font-variant-numeric:tabular-nums; }
+  .income .lbl { font-size:13px; color:var(--ink2); }
+
+  /* scenario toggle */
+  .scn-toggle { display:inline-flex; background:var(--bg2); border:1px solid var(--line); border-radius:999px; padding:5px; margin:6px 0 20px; }
+  .scn-toggle button { border:none; background:transparent; font:inherit; font-weight:600; font-size:14px; color:var(--muted); padding:9px 18px; border-radius:999px; cursor:pointer; }
+  .scn-toggle button.active { color:#fff; }
+  .scn-toggle button.active[data-s=fall] { background:var(--tide-deep); }
+  .scn-toggle button.active[data-s=flat] { background:var(--ink2); }
+  .scn-toggle button.active[data-s=rise] { background:var(--good); }
+  .scn-out { border-radius:12px; padding:22px; border:1px solid var(--line); }
+  .scn-out .verdict { font-size:19px; font-weight:700; margin-bottom:6px; }
+  .scn-out .detail { font-size:15px; color:var(--ink2); }
+  .scn-out .row { display:flex; gap:24px; flex-wrap:wrap; margin-top:14px; }
+  .scn-out .row .k { font-size:12px; text-transform:uppercase; color:var(--muted); letter-spacing:.04em; }
+  .scn-out .row .v { font-size:18px; font-weight:700; font-variant-numeric:tabular-nums; }
+
+  /* compare bars */
+  .bar-row { display:grid; grid-template-columns:130px 1fr 64px; align-items:center; gap:12px; margin-bottom:12px; }
+  .bar-row .lab { font-size:14px; color:var(--ink2); }
+  .bar-track { background:var(--bg2); border-radius:999px; height:26px; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:999px; display:flex; align-items:center; }
+  .bar-row .num { font-size:16px; font-weight:700; text-align:right; font-variant-numeric:tabular-nums; }
+
+  /* risk list */
+  .risk { display:flex; gap:14px; align-items:flex-start; padding:14px 0; border-top:1px solid var(--line); }
+  .risk:first-child { border-top:none; }
+  .risk .ic { flex:none; width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:17px; }
+  .risk h3 { font-size:16px; margin-bottom:3px; }
+  .risk p { font-size:14px; margin:0; }
+
+  .cta { display:inline-flex; align-items:center; gap:8px; background:var(--tide-deep); color:#fff; font-weight:600; padding:13px 26px; border-radius:999px; cursor:pointer; border:none; font-size:15px; }
+  .cta:hover { background:var(--sea); }
+  .picker { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  select.bondpick { font:inherit; font-size:14px; padding:9px 14px; border:1px solid var(--line); border-radius:10px; background:#fff; }
+  .back { font-size:14px; color:var(--muted); }
+  footer { padding:30px 0; color:var(--muted); font-size:12px; text-align:center; }
+  .disclaim { max-width:720px; margin:10px auto 0; font-size:11.5px; color:#9aabbd; line-height:1.5; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="brand" href="/tidal">
+      <svg class="mark" viewBox="0 0 32 32" fill="none"><path d="M2 20c4 0 4-5 8-5s4 5 8 5 4-5 8-5" stroke="#0860c4" stroke-width="2.4" stroke-linecap="round"/><circle cx="16" cy="9" r="3.4" fill="#0860c4"/></svg>
+      Tidal Finance
+    </a>
+    <a class="back" href="/tidal">← Back</a>
+  </div>
+</nav>
+
+<div class="wrap" style="padding-top:30px; padding-bottom:40px;">
+
+  <div class="picker" style="margin-bottom:18px;">
+    <span class="muted" style="font-size:13px;">Example bond:</span>
+    <select id="bondpick" class="bondpick"></select>
+  </div>
+
+  <!-- HEADER -->
+  <div class="card">
+    <span class="pill" id="b-pill">Agency callable</span>
+    <div class="bh"><div class="name" id="b-name">—</div></div>
+    <p class="muted" id="b-issuername" style="margin:0;">—</p>
+    <div class="specs">
+      <div class="spec"><div class="k">Coupon</div><div class="v" id="b-coupon">—</div></div>
+      <div class="spec"><div class="k">Maturity</div><div class="v" id="b-mat">—</div></div>
+      <div class="spec"><div class="k">First call</div><div class="v" id="b-call">—</div></div>
+      <div class="spec"><div class="k">Min per bond</div><div class="v" id="b-min">—</div></div>
+    </div>
+  </div>
+
+  <!-- INCOME CALC -->
+  <div class="card">
+    <h2>What you'd earn</h2>
+    <p class="muted">A bond pays its coupon on its face value (par). Here's the cash, in dollars.</p>
+    <div class="calc">
+      <label>How many bonds?</label>
+      <input type="number" id="qty" value="10" min="1" step="1" />
+      <span class="arrow">→</span>
+      <div class="income">
+        <div class="big" id="annualIncome">—</div>
+        <div class="lbl"><span id="incomeBreak">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CALL SCENARIO -->
+  <div class="card">
+    <h2>The "call," shown three ways</h2>
+    <p class="muted">This bond is callable — the issuer can buy it back early starting at the first-call date. Slide through what happens to <em>you</em> in each rate environment.</p>
+    <div class="scn-toggle" id="scnToggle">
+      <button data-s="fall" class="active" onclick="setScn('fall')">Rates fall ↓</button>
+      <button data-s="flat" onclick="setScn('flat')">Rates flat →</button>
+      <button data-s="rise" onclick="setScn('rise')">Rates rise ↑</button>
+    </div>
+    <div class="scn-out" id="scnOut"></div>
+    <p class="muted" style="margin:16px 0 0; font-size:13.5px;">Either way, you collected an above-market coupon for the whole time you held it. That premium is what you're paid for giving the issuer the option to call.</p>
+  </div>
+
+  <!-- VALUE VS ALTERNATIVES -->
+  <div class="card">
+    <h2>Why it pays more</h2>
+    <p class="muted">This bond's coupon versus where comparable safe options sit today.</p>
+    <div id="bars"></div>
+    <p class="muted" style="margin:14px 0 0; font-size:13.5px;" id="pickupNote">—</p>
+  </div>
+
+  <!-- RISKS -->
+  <div class="card">
+    <h2>The risks, straight</h2>
+    <div class="risk">
+      <div class="ic" style="background:#fff3cd; color:var(--warn);">📞</div>
+      <div><h3>Call risk — the main one</h3><p>If rates fall, the issuer may call it early. You get your principal back at 100¢ and stop earning the high coupon — then you reinvest at the now-lower rates. You're paid the premium coupon precisely for taking this.</p></div>
+    </div>
+    <div class="risk">
+      <div class="ic" style="background:#dff3e8; color:var(--good);">🏛️</div>
+      <div><h3>Credit risk — very low</h3><p>These are US federal agencies (FHLB, Freddie, Farm Credit) — among the highest-quality issuers in the world, a notch below US Treasuries. Default risk is minimal.</p></div>
+    </div>
+    <div class="risk">
+      <div class="ic" style="background:var(--foam); color:var(--tide-deep);">🌊</div>
+      <div><h3>Liquidity risk</h3><p>If you want out before maturity, you sell on Tidal — peer-to-peer, into dealer bids during US hours, or to us up to a size after hours. Pricing moves with the market; you may get more or less than you paid.</p></div>
+    </div>
+    <div class="risk">
+      <div class="ic" style="background:#eef1f5; color:var(--ink2);">📈</div>
+      <div><h3>Rate risk</h3><p>If you sell before maturity and rates have risen, the price is lower (and vice-versa). Hold to call or maturity and you get par back regardless.</p></div>
+    </div>
+  </div>
+
+  <div style="text-align:center; margin:28px 0 10px;">
+    <a href="/tidal#subscribe" class="cta">Get notified when it drops →</a>
+  </div>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    © 2026 Tidal Finance
+    <div class="disclaim">
+      Illustrative and educational only — not an offer, solicitation, or investment advice, and not directed at US persons. Scenario outcomes are simplified estimates assuming the bond is held and (where shown) called at the first-call date; actual results depend on the issuer's decision, timing, reinvestment, fees, and market prices. Yields shown are indicative.
+    </div>
+  </div>
+</footer>
+
+<script>
+  let BONDS = [];
+  let current = null;
+  let scenario = 'fall';
+
+  const fmtD = (iso) => { if (!iso) return '—'; const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[2]}/${m[3]}/${m[1]}` : iso; };
+  const yearsBetween = (a, b) => { try { return Math.max(0, (new Date(b) - new Date(a)) / (365.25*24*3600*1000)); } catch(e){ return null; } };
+  const usd = (n) => '$' + Math.round(n).toLocaleString();
+
+  async function load() {
+    try {
+      const r = await fetch('/api/tidal/bonds');
+      const j = await r.json();
+      BONDS = j.bonds || [];
+    } catch (e) { BONDS = []; }
+    const pick = document.getElementById('bondpick');
+    if (!BONDS.length) { pick.innerHTML = '<option>No bonds available</option>'; return; }
+    pick.innerHTML = BONDS.map((b, i) => `<option value="${i}">${b.issuer} ${b.structure} · ${b.coupon}%</option>`).join('');
+    pick.onchange = () => selectBond(+pick.value);
+    selectBond(0);
+  }
+
+  function selectBond(i) {
+    current = BONDS[i];
+    const b = current;
+    document.getElementById('b-name').textContent = `${b.issuer} ${b.structure}`;
+    document.getElementById('b-issuername').textContent = `${b.issuer_name} · ${b.coupon}% coupon`;
+    document.getElementById('b-coupon').textContent = b.coupon + '%';
+    document.getElementById('b-mat').textContent = fmtD(b.maturity_date);
+    document.getElementById('b-call').textContent = fmtD(b.first_call_date);
+    document.getElementById('b-min').textContent = usd(b.min_par);
+    recalcIncome();
+    renderScenario();
+    renderBars();
+  }
+
+  function recalcIncome() {
+    if (!current) return;
+    const qty = Math.max(1, parseInt(document.getElementById('qty').value || '1', 10));
+    const face = qty * current.min_par;
+    const annual = face * (current.coupon / 100);
+    document.getElementById('annualIncome').textContent = usd(annual) + '/yr';
+    document.getElementById('incomeBreak').textContent =
+      `${qty} bond${qty>1?'s':''} = ${usd(face)} face · ${current.coupon}% · paid ~${usd(annual/2)} every 6 months`;
+  }
+  document.getElementById('qty').addEventListener('input', recalcIncome);
+
+  function setScn(s) {
+    scenario = s;
+    document.querySelectorAll('#scnToggle button').forEach((btn) => btn.classList.toggle('active', btn.dataset.s === s));
+    renderScenario();
+  }
+
+  function renderScenario() {
+    if (!current) return;
+    const b = current;
+    const qty = Math.max(1, parseInt(document.getElementById('qty').value || '1', 10));
+    const face = qty * b.min_par;
+    const yrsToCall = yearsBetween(b.settle_date || new Date().toISOString(), b.first_call_date) || 1;
+    const yrsToMat  = yearsBetween(b.settle_date || new Date().toISOString(), b.maturity_date) || yrsToCall;
+    const out = document.getElementById('scnOut');
+    const annual = face * (b.coupon / 100);
+
+    let bg, border, verdict, detail, held, income;
+    if (scenario === 'fall') {
+      bg = '#f0f7ff'; border = '#cfe3fb';
+      held = yrsToCall;
+      income = annual * yrsToCall;
+      verdict = `Likely called on ${fmtD(b.first_call_date)}`;
+      detail = `When rates drop, the issuer refinances cheaper and calls the bond. You collected the ${b.coupon}% coupon for about ${yrsToCall.toFixed(1)} years, then get your ${usd(face)} back at 100¢. You'd reinvest at the new, lower rates.`;
+    } else if (scenario === 'flat') {
+      bg = '#f6f8fa'; border = 'var(--line)';
+      held = (yrsToCall + yrsToMat) / 2;
+      income = annual * held;
+      verdict = `Could go either way`;
+      detail = `If rates hold near here, the issuer may or may not call. Realistically you earn the ${b.coupon}% coupon somewhere between the call date and maturity — and you keep ${usd(face)} of principal at the end.`;
+    } else {
+      bg = '#f1faf4'; border = '#cdeedb';
+      held = yrsToMat;
+      income = annual * yrsToMat;
+      verdict = `Not called — runs to ${fmtD(b.maturity_date)}`;
+      detail = `When rates rise, the issuer has no reason to refinance, so it stays outstanding. You keep collecting ${b.coupon}% all the way to maturity (~${yrsToMat.toFixed(1)} years) — an above-market coupon locked in.`;
+    }
+    out.style.background = bg; out.style.borderColor = border;
+    out.innerHTML = `
+      <div class="verdict">${verdict}</div>
+      <div class="detail">${detail}</div>
+      <div class="row">
+        <div><div class="k">Coupon income (~${held.toFixed(1)} yrs)</div><div class="v">${usd(income)}</div></div>
+        <div><div class="k">Principal back</div><div class="v">${usd(face)}</div></div>
+        <div><div class="k">On ${qty} bond${qty>1?'s':''}</div><div class="v">${usd(face)} invested</div></div>
+      </div>`;
+  }
+
+  function renderBars() {
+    if (!current) return;
+    const b = current;
+    const c = b.compare || {};
+    const rows = [
+      { lab: `This bond`, val: b.coupon, color: 'linear-gradient(90deg,#0a84ff,#0860c4)', bold:true },
+      { lab: `${b.tenor_years || ''}yr Treasury`, val: c.ust_same_tenor, color: '#9fb6cc' },
+      { lab: `Money market`, val: c.money_market, color: '#c3d2e0' },
+    ].filter(r => r.val != null);
+    const max = Math.max(...rows.map(r => r.val)) || 1;
+    document.getElementById('bars').innerHTML = rows.map(r => `
+      <div class="bar-row">
+        <div class="lab" style="${r.bold?'font-weight:700;color:var(--ink)':''}">${r.lab}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.max(8,(r.val/max)*100)}%; background:${r.color};"></div></div>
+        <div class="num">${r.val}%</div>
+      </div>`).join('');
+    const pk = c.pickup_vs_ust_bp;
+    document.getElementById('pickupNote').textContent = (pk != null)
+      ? `That's about ${pk} bp (${(pk/100).toFixed(2)}%) more yield than a Treasury of the same maturity — your pay for the call option.`
+      : '';
+  }
+
+  load();
+</script>
+</body>
+</html>

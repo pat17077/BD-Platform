@@ -2339,6 +2339,10 @@ app.get('/tidal', (_req, res) => {
   if (!TIDAL_PUBLIC) return res.status(404).send('Not found');
   res.sendFile(path.join(__dirname, 'tidal.html'));
 });
+app.get('/tidal/bond', (_req, res) => {
+  if (!TIDAL_PUBLIC) return res.status(404).send('Not found');
+  res.sendFile(path.join(__dirname, 'tidal-bond.html'));
+});
 
 // Email capture from the landing page. NON-US PERSONS ONLY — we reject any
 // US country selection or a failed non-US attestation, and never store the
@@ -2397,6 +2401,71 @@ app.get('/api/tidal/sample-bond', (_req, res) => {
         min_par: r.issuer === 'FHLB' ? 10000 : 1000,
       },
     });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// List of real callables for the retail explainer, each enriched with the
+// comparison yields that make the "value per bond" story concrete.
+app.get('/api/tidal/bonds', (_req, res) => {
+  try {
+    const curve = cache.curve || {};
+    const ustAt = (years) => {
+      // closest active UST tenor at or below
+      const map = [[30,'30yr'],[20,'20yr'],[10,'10yr'],[7,'7yr'],[5,'5yr'],[3,'3yr'],[2,'2yr'],[1,'1yr'],[0.5,'6mo'],[0.25,'3mo']];
+      for (const [y, k] of map) { if (years >= y && curve[k] && typeof curve[k].yield === 'number') return curve[k].yield; }
+      return curve['1yr'] && curve['1yr'].yield;
+    };
+    const mmRate = (cache.economicData && cache.economicData.sofr && cache.economicData.sofr.current) ||
+                   (curve['3mo'] && curve['3mo'].yield) || null;
+    const tenorOf = (s) => { const m = String(s||'').match(/^(\d+(?:\.\d+)?)\s*yr/i); return m ? parseFloat(m[1]) : null; };
+    const lockoutMonths = (s) => { const m = String(s||'').match(/\/\s*(\d+(?:\.\d+)?)\s*(yr|mo)/i); if(!m) return null; return m[2].toLowerCase()==='yr' ? parseFloat(m[1])*12 : parseFloat(m[1]); };
+    const addMonthsIso = (iso, months) => {
+      if (!iso || months == null) return null;
+      const d = new Date(iso + 'T00:00:00Z');
+      d.setUTCMonth(d.getUTCMonth() + Math.round(months));
+      return d.toISOString().slice(0, 10);
+    };
+    // first call: use stored value, else derive from settle + lockout
+    const firstCallOf = (r) => {
+      if (r.first_call_date) return r.first_call_date;
+      const lm = lockoutMonths(r.structure);
+      return addMonthsIso(r.settle_date, lm);
+    };
+
+    const rows = (agencyDb.getRows('issues') || []).filter((r) =>
+      r.cusip && !String(r.cusip).startsWith('PENDING-') &&
+      r.coupon && r.coupon !== '' && r.fees !== 'DNT' &&
+      (r.issuer === 'FHLB' || r.issuer === 'FFCB') &&
+      r.structure && r.maturity_date
+    );
+    rows.sort((a, b) => (b.pricing_date || '').localeCompare(a.pricing_date || ''));
+
+    const bonds = rows.slice(0, 12).map((r) => {
+      const coupon = parseFloat(r.coupon);
+      const tenor = tenorOf(r.structure);
+      const ust = tenor != null ? ustAt(tenor) : null;
+      return {
+        cusip: r.cusip,
+        issuer: r.issuer,
+        issuer_name: r.issuer === 'FHLB' ? 'Federal Home Loan Bank' : 'Federal Farm Credit Bank',
+        structure: r.structure,
+        tenor_years: tenor,
+        lockout_months: lockoutMonths(r.structure),
+        coupon,
+        settle_date: r.settle_date,
+        maturity_date: r.maturity_date,
+        first_call_date: firstCallOf(r),
+        min_par: r.issuer === 'FHLB' ? 10000 : 1000,
+        compare: {
+          ust_same_tenor: ust != null ? Math.round(ust * 100) / 100 : null,
+          money_market: mmRate != null ? Math.round(mmRate * 100) / 100 : null,
+          pickup_vs_ust_bp: (isFinite(coupon) && ust != null) ? Math.round((coupon - ust) * 100) : null,
+        },
+      };
+    });
+    res.json({ bonds, curve_date: cache.curveUpdated });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
